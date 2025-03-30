@@ -1,0 +1,79 @@
+```mermaid
+classDiagram
+  class Classifier {
+    classify()
+  }
+  class Configs {
+    drone
+    kinnect
+    motion
+    myoband
+    robot_arm
+  }
+  class Drone {
+    debug_mode
+    ip
+    port
+    speed
+    connect()
+    disconnect()
+    moveArm()
+    sendCommand()
+  }
+  class DroneConfig {
+    ip : str
+    port : int
+  }
+  class Kinnect {
+    ip
+    port
+    connect()
+    disconnect()
+    getPosition()
+  }
+  class KinnectConfig {
+    ip : str
+    port : int
+  }
+  class MotionConfig {
+    debug_mode : int
+    speed : str
+  }
+  class Myoband {
+    ip
+    port
+    connect()
+    disconnect()
+    getData()
+  }
+  class MyobandConfig {
+    ip : str
+    port : int
+  }
+  class Orchestrator {
+    classifier
+    configs
+    drone
+    kinnect
+    myoband
+    connect()
+    disconnect()
+    poll_sensors()
+    run_calculations(desired_pos)
+    send_output(cmd, joint_positions)
+  }
+  class RobotArmConfig {
+    base_height : float
+    link_lengths : List[float]
+  }
+  Classifier --* Orchestrator : classifier
+  Drone --* Orchestrator : drone
+  Kinnect --* Orchestrator : kinnect
+  Myoband --* Orchestrator : myoband
+  Configs --* Orchestrator : configs
+  DroneConfig --* Configs : drone
+  KinnectConfig --* Configs : kinnect
+  MotionConfig --* Configs : motion
+  MyobandConfig --* Configs : myoband
+  RobotArmConfig --* Configs : robot_arm
+```

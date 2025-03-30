@@ -1,0 +1,19 @@
+drone:
+  ip: "192.168.1.10"
+  port: 8888
+
+robot_arm:
+  base_height: 0.05
+  link_lengths: [0.3, 0.25, 0.1]
+
+motion:
+  speed: 1.0
+  debug_mode: true
+
+myoband:
+  ip: "192.168.1.10"
+  port: 8888
+
+kinnect:
+  ip: "192.168.1.10"
+  port: 8888
