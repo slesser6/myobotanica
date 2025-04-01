@@ -12,7 +12,11 @@ motion:
 
 myoband:
   ip: "192.168.1.10"
-  port: 8888
+  port1: 15001
+  port2: 15002
+  sample_freq: 1000.0
+  input_freq: 200.0
+  verbose: True
 
 kinnect:
   ip: "192.168.1.10"

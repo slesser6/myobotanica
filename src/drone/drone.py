@@ -5,14 +5,14 @@ class Drone:
         self.speed = motion_cfg.speed
         self.debug_mode = motion_cfg.debug_mode
 
-    def connect():
+    def connect(self):
         return 0
     
-    def sendCommand():
+    def sendCommand(self, cmd):
         return 0
     
-    def moveArm(joint_values):
+    def moveArm(self, joint_values):
         return 0
     
-    def disconnect():
+    def disconnect(self):
         return 0

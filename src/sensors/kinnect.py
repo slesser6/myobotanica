@@ -3,11 +3,11 @@ class Kinnect:
         self.ip = cfg.ip
         self.port = cfg.port
 
-    def connect():
+    def connect(self):
         return 0
 
-    def getPosition():
+    def getPosition(self):
         return []
     
-    def disconnect():
+    def disconnect(self):
         return 0

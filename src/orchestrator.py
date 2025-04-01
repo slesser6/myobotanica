@@ -7,7 +7,6 @@ from src.kinematics import solve_ik
 
 class Orchestrator:
     def __init__(self):
-        self.debug
         self.configs = load_config()
         self.drone = Drone(self.configs.drone, self.configs.motion)
         self.myoband = Myoband(self.configs.myoband)
@@ -25,8 +24,12 @@ class Orchestrator:
         self.drone.disconnect()
 
     def poll_sensors(self):
-        myo_data = self.myoband.getData()
-        classification = self.classifier.classify(myo_data)
+        self.myoband.update()
+        classification = None
+        if self.myoband.is_ready(50):
+            data_block = self.myoband.get_data(50)
+            print("Shape of data_block:", data_block.shape)
+            classification = self.classifier.classify(data_block)
         position = self.kinnect.getPosition()
         return classification, position
 

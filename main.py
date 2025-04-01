@@ -1,10 +1,6 @@
-import click
 from src.orchestrator import Orchestrator
 
-@click.command()
-@click.option('--test_arg', default='test')
-def main(test):
-    print(test)
+def main():
 
     o = Orchestrator()
     o.connect()

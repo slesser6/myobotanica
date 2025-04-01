@@ -21,7 +21,11 @@ class MotionConfig:
 @dataclass
 class MyobandConfig:
     ip: str
-    port: int
+    port1: int
+    port2: int
+    sample_freq: float
+    input_freq: float
+    verbose: bool
 
 @dataclass
 class KinnectConfig:
