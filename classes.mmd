@@ -16,8 +16,8 @@ classDiagram
     speed
     connect()
     disconnect()
-    moveArm()
-    sendCommand()
+    moveArm(joint_values)
+    sendCommand(cmd)
   }
   class DroneConfig {
     ip : str
@@ -39,22 +39,24 @@ classDiagram
     speed : str
   }
   class Myoband {
-    ip
-    port
     connect()
     disconnect()
     getData()
   }
   class MyobandConfig {
+    input_freq : float
     ip : str
-    port : int
+    port1 : int
+    port2 : int
+    sample_freq : float
+    verbose : bool
   }
   class Orchestrator {
     classifier
     configs
     drone
     kinnect
-    myoband
+    myoband : Myoband
     connect()
     disconnect()
     poll_sensors()
