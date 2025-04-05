@@ -5,8 +5,9 @@ from typing import List
 
 @dataclass
 class DroneConfig:
-    ip: str
-    port: int
+    port: str
+    baud_rate: int
+    takeoff_alt: int
 
 @dataclass
 class RobotArmConfig:

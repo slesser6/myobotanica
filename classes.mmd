@@ -10,18 +10,21 @@ classDiagram
     robot_arm
   }
   class Drone {
+    baud_rate
     debug_mode
-    ip
     port
+    ser : Serial
     speed
+    takeoff_alt
     connect()
     disconnect()
-    moveArm(joint_values)
-    sendCommand(cmd)
+    runScriptMode(cmds)
+    sendCommand(cmd, wait_time, expect_multi, end_keyword)
   }
   class DroneConfig {
-    ip : str
-    port : int
+    baud_rate : int
+    port : str
+    takeoff_alt : int
   }
   class Kinnect {
     ip
@@ -59,9 +62,10 @@ classDiagram
     myoband : Myoband
     connect()
     disconnect()
+    get_status()
     poll_sensors()
     run_calculations(desired_pos)
-    send_output(cmd, joint_positions)
+    send_output(cmds)
   }
   class RobotArmConfig {
     base_height : float

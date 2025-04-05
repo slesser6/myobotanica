@@ -26,16 +26,20 @@ class Orchestrator:
     def poll_sensors(self):
         self.myoband.update()
         classification = None
+        
         if self.myoband.is_ready(50):
             data_block = self.myoband.get_data(50)
-            print("Shape of data_block:", data_block.shape)
             classification = self.classifier.classify(data_block)
         position = self.kinnect.getPosition()
         return classification, position
+    
+    def get_status(self):
+        print(f""+self.drone.sendCommand("FC:GETSTATE\n", 3, True, "END_RESPONSE"))
+        # get status from myobanc?
+        # get status from kinnect
 
     def run_calculations(self, desired_pos):
         return solve_ik(desired_pos)
 
-    def send_output(self, cmd, joint_positions):
-        self.drone.sendCommand(cmd)
-        self.drone.moveArm(joint_positions)
+    def send_output(self, cmds):
+        self.drone.runScriptMode(cmds)

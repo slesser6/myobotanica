@@ -7,7 +7,7 @@ class Kinnect:
         return 0
 
     def getPosition(self):
-        return []
+        return 0
     
     def disconnect(self):
         return 0
