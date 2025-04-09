@@ -81,7 +81,7 @@ def main():
         print("4. MOVE (FWD/BACK)  - Move the drone forward or backward")
         print("5. YAW (LEFT/RIGHT) - Yaw the drone left or right")
         print("6. LAND             - Land the drone")
-        print("7. SERVO            - Control water arm servo (pitch/yaw)")
+        print("7. SERVO            - Control water arm servos (pitch1/pitch2)")
         print("8. PUMP             - Turn water pump ON/OFF")
         print("9. Script Mode      - Run a preconfigured sequence")
         print("10. Custom Command  - Send arbitrary command")
@@ -90,6 +90,7 @@ def main():
 
         if choice == "1":
             send_command(ser, "FC:GETSTATE\n", wait_time=3, expect_multi=True, end_keyword="END_RESPONSE")
+        
         elif choice == "2":
             responses = send_command(ser, "FC:ARM\n", wait_time=10, expect_multi=True, end_keyword="END_RESPONSE")
             # if not responses:
@@ -97,30 +98,62 @@ def main():
             # elif any("failed" in resp.lower() for resp in responses):
             #     print("Drone reported failure to arm.")
         elif choice == "3":
-            alt = input("Enter target altitude (m): ").strip()
-            send_command(ser, f"FC:TAKEOFF:{alt}\n", wait_time=15, expect_multi=True, end_keyword="END_RESPONSE")
+            # Removing the altitude prompt; the flight controller will use its pre-programmed default.
+            send_command(ser, "FC:TAKEOFF\n", wait_time=15, expect_multi=True, end_keyword="END_RESPONSE")
+
         elif choice == "4":
-            direction = input("Enter 'FWD' or 'BACK': ").strip().upper()
-            send_command(ser, f"FC:MOVE:{direction}\n", wait_time=5, expect_multi=True, end_keyword="END_RESPONSE")
+            # Let the user choose between move forward and move back without needing extra parameters.
+            print("4a. MOVE FORWARD")
+            print("4b. MOVE BACKWARD")
+            sub_choice = input("Enter choice (a or b): ").strip().lower()
+            if sub_choice == "a":
+                send_command(ser, "FC:MOVEFWD\n", wait_time=5, expect_multi=True, end_keyword="END_RESPONSE")
+            elif sub_choice == "b":
+                send_command(ser, "FC:MOVEBACK\n", wait_time=5, expect_multi=True, end_keyword="END_RESPONSE")
+            else:
+                print("Invalid move command choice.")
+
         elif choice == "5":
-            direction = input("Enter 'LEFT' or 'RIGHT': ").strip().upper()
-            send_command(ser, f"FC:YAW:{direction}\n", wait_time=5, expect_multi=True, end_keyword="END_RESPONSE")
+            # Let the user choose between yaw left and yaw right.
+            print("5a. YAW LEFT")
+            print("5b. YAW RIGHT")
+            sub_choice = input("Enter choice (a or b): ").strip().lower()
+            if sub_choice == "a":
+                send_command(ser, "FC:YAWLEFT\n", wait_time=5, expect_multi=True, end_keyword="END_RESPONSE")
+            elif sub_choice == "b":
+                send_command(ser, "FC:YAWRIGHT\n", wait_time=5, expect_multi=True, end_keyword="END_RESPONSE")
+            else:
+                print("Invalid yaw command choice.")
+        
         elif choice == "6":
             send_command(ser, "FC:LAND\n", wait_time=10, expect_multi=True, end_keyword="END_RESPONSE")
+        
         elif choice == "7":
-            axis = input("Enter 'PITCH' or 'YAW': ").strip().upper()
-            angle = input("Enter servo angle (0-180): ").strip()
-            send_command(ser, f"AR:SERVO:{axis}:{angle}\n", wait_time=3, expect_multi=True, end_keyword="END_RESPONSE")
+            # Prompt the user for separate angles.
+            angle1 = input("Enter servo1 angle (0-180) [PITCH]: ").strip()
+            angle2 = input("Enter servo2 angle (0-180) [PITCH2]: ").strip()
+            
+            # Send the command for servo1.
+            response1 = send_command(ser, f"AR:SERVO:PITCH:{angle1}\n", wait_time=3, expect_multi=True, end_keyword="END_RESPONSE")
+            print(response1)
+            
+            # Send the command for servo2.
+            response2 = send_command(ser, f"AR:SERVO:PITCH2:{angle2}\n", wait_time=3, expect_multi=True, end_keyword="END_RESPONSE")
+            print(response2)
+            
         elif choice == "8":
             state = input("Enter 'ON' or 'OFF': ").strip().upper()
             send_command(ser, f"AR:PUMP:{state}\n", wait_time=3, expect_multi=True, end_keyword="END_RESPONSE")
+        
         elif choice == "9":
             run_script_mode(ser)
+        
         elif choice == "10":
             custom_cmd = input("Enter custom command: ").strip()
             if not custom_cmd.endswith("\n"):
                 custom_cmd += "\n"
             send_command(ser, custom_cmd, wait_time=5, expect_multi=True, end_keyword="END_RESPONSE")
+        
         elif choice == "11":
             print("Exiting ground station.")
             break
