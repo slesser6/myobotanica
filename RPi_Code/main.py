@@ -14,15 +14,15 @@ def main():
     command_queue = queue.Queue()
 
     # Initialize the CommandReceiver (telemetry radio interface)
-    receiver = CommandReceiver(serial_port='/dev/ttyUSB0', baud_rate=57600, command_queue=command_queue)
+    receiver = CommandReceiver(serial_port='/dev/ttyUSB1', baud_rate=57600, command_queue=command_queue)
     receiver.start()
 
     # Initialize the FlightController (MAVLink / DroneKit interface)
     fc = FlightController(connection_string='/dev/ttyAMA0', baud_rate=115200)
     fc.connect()
 
-    # Initialize the Arduino controller (for water arm servos & pump)
-    # arduino = ArduinoController(serial_port='/dev/ttyUSB1', baud_rate=9600)
+    # # Initialize the Arduino controller (for water arm servos & pump)
+    arduino = ArduinoController(serial_port='/dev/ttyUSB0', baud_rate=9600)
 
     print("Drone hub system running...")
     while True:
@@ -43,9 +43,9 @@ def main():
                 elif command.startswith("AR:"):
                     payload = command[3:]
                     print("Sending arduino command")
-                    # response = arduino.send_command(payload)
-                    # if response:
-                    #     receiver.send_response(response)
+                    response = arduino.send_command(payload)
+                    if response:
+                        receiver.send_response(response)
 
                 else:
                     print("Unknown command type:", command)

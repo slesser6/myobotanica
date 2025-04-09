@@ -9,7 +9,7 @@ Output: Push received commands to a shared message queue or use callbacks to not
 '''
 
 class CommandReceiver(threading.Thread):
-    def __init__(self, serial_port='/dev/ttyUSB0', baud_rate=57600, command_queue=None):
+    def __init__(self, serial_port='/dev/ttyUSB1', baud_rate=57600, command_queue=None):
         super().__init__(daemon=True)
         self.serial_port = serial_port
         self.baud_rate = baud_rate
@@ -20,10 +20,17 @@ class CommandReceiver(threading.Thread):
         print("Command Receiver: Listening on", self.serial_port)
         while True:
             try:
-                line = self.ser.readline().decode(errors='ignore').strip()
+                raw = self.ser.readline()
+                decoded = raw.decode(errors='ignore')
+                line = decoded.strip()
+                # print(f"[DEBUG] Raw: {repr(raw)}, Decoded: {repr(decoded)}, Stripped: {repr(line)}")
                 if line:
                     print("Received command:", line)
                     self.command_queue.put(line)
+                else:
+                    # Uncomment to see when empty lines are received:
+                    # print("[DEBUG] Received an empty command.")
+                    pass
             except Exception as e:
                 print("Command Receiver error:", e)
     
