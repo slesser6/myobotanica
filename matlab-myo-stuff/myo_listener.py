@@ -54,18 +54,18 @@ def start_server(host='localhost', port=65432):
 
                 # decode what we got and do something with it
                 found = True
-                if (value == "Wrist Flex In"):
-                    q[0] = q[0] - np.pi/20
-                elif (value == "Wrist Extend Out"):
-                    q[0] = q[0] + np.pi/20
+                if (value == "Wrist Rotate In"):
+                    q[0] = q[0] - np.pi/50
+                elif (value == "Wrist Rotate Out"):
+                    q[0] = q[0] + np.pi/50
                 elif (value == "Elbow Flexion"):
-                    q[1] = q[1] - np.pi/20
+                    q[1] = q[1] + np.pi/50
                 elif (value == "Elbow Extension"):
-                    q[1] = q[1] + np.pi/20
-                elif (value == "Wrist Adduction"):
-                    q[2] = q[2] - np.pi/20
-                elif (value == "Wrist Abduction"):
-                    q[2] = q[2] + np.pi/20
+                    q[1] = q[1] - np.pi/50
+                elif (value == "Wrist Flex In"):
+                    q[2] = q[2] - np.pi/50
+                elif (value == "Wrist Extend Out"):
+                    q[2] = q[2] + np.pi/50
                 elif (value == "Power Grasp"):
                     print("Spraying water")
                 else:
