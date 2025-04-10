@@ -13,7 +13,7 @@ classDiagram
     baud_rate
     debug_mode
     port
-    ser : Serial
+    ser : NoneType, Serial
     speed
     takeoff_alt
     connect()
@@ -27,12 +27,15 @@ classDiagram
     takeoff_alt : int
   }
   class Kinect {
+    is_win
+    kinect : NoneType, PyKinectRuntime
+    pygame : NoneType
     connect()
     disconnect()
     getPosition()
   }
   class KinectConfig {
-    config_placeholder : bool
+    is_win : bool
   }
   class MotionConfig {
     debug_mode : int
