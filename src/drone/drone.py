@@ -7,6 +7,7 @@ class Drone:
         self.takeoff_alt = drone_cfg.takeoff_alt
         self.speed = motion_cfg.speed
         self.debug_mode = motion_cfg.debug_mode
+        self.ser = None
 
     def connect(self):
         try:
@@ -93,6 +94,6 @@ class Drone:
 
     
     def disconnect(self):
-        if self.ser:
+        if self.ser is not None:
             self.ser.close()
         print("[Drone] Disconnected to telemetry radio")

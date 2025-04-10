@@ -1,2 +1,2 @@
-from .kinnect import Kinnect
+from .kinect import Kinect
 from .myoband import Myoband 

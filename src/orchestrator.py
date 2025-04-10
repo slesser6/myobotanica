@@ -1,7 +1,7 @@
 from src.utils import load_config
 from src.drone import Drone
 from src.sensors import Myoband
-from src.sensors import Kinnect
+from src.sensors import Kinect
 from src.classifier import Classifier
 from src.kinematics import solve_ik
 
@@ -10,17 +10,17 @@ class Orchestrator:
         self.configs = load_config()
         self.drone = Drone(self.configs.drone, self.configs.motion)
         self.myoband = Myoband(self.configs.myoband)
-        self.kinnect = Kinnect(self.configs.kinnect)
+        self.kinect = Kinect(self.configs.kinect)
         self.classifier = Classifier()
 
     def connect(self):
         self.myoband.connect()
-        self.kinnect.connect()
+        self.kinect.connect()
         self.drone.connect()
 
     def disconnect(self):
         self.myoband.disconnect()
-        self.kinnect.disconnect()
+        self.kinect.disconnect()
         self.drone.disconnect()
 
     def poll_sensors(self):
@@ -30,13 +30,13 @@ class Orchestrator:
         if self.myoband.is_ready(50):
             data_block = self.myoband.get_data(50)
             classification = self.classifier.classify(data_block)
-        position = self.kinnect.getPosition()
+        position = self.kinect.getPosition()
         return classification, position
     
     def get_status(self):
         print(f""+self.drone.sendCommand("FC:GETSTATE\n", 3, True, "END_RESPONSE"))
-        # get status from myobanc?
-        # get status from kinnect
+        # get status from myoband?
+        # get status from kinect
 
     def run_calculations(self, desired_pos):
         return solve_ik(desired_pos)

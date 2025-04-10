@@ -32,16 +32,17 @@ def main():
             
 
             # TODO: update this with the actual thresholds
-            if not takeoff and position > 5: 
-                cmds.append((f"FC:TAKEOFF:{o.drone.takeoff_alt}\n", 15, True, "END_RESPONSE"))
-                takeoff = True
-            if takeoff and position > 5:
-                cmds.append((f"FC:MOVE:FWD\n", 5, True, "END_RESPONSE"))
-            if takeoff and position < 5:
-                cmds.append((f"FC:MOVE:BACK\n", 5, True, "END_RESPONSE"))
-            if takeoff and position < 5:
-                cmds.append(("FC:LAND\n", 10, True, "END_RESPONSE"))
-                takeoff = False
+            if position is not None:
+                if not takeoff and position > 5: 
+                    cmds.append((f"FC:TAKEOFF:{o.drone.takeoff_alt}\n", 15, True, "END_RESPONSE"))
+                    takeoff = True
+                if takeoff and position > 5:
+                    cmds.append((f"FC:MOVE:FWD\n", 5, True, "END_RESPONSE"))
+                if takeoff and position < 5:
+                    cmds.append((f"FC:MOVE:BACK\n", 5, True, "END_RESPONSE"))
+                if takeoff and position < 5:
+                    cmds.append(("FC:LAND\n", 10, True, "END_RESPONSE"))
+                    takeoff = False
 
     finally:
         o.disconnect()
