@@ -4,7 +4,7 @@ classDiagram
   }
   class Configs {
     drone
-    kinnect
+    kinect
     motion
     myoband
     robot_arm
@@ -13,7 +13,7 @@ classDiagram
     baud_rate
     debug_mode
     port
-    ser : Serial
+    ser : NoneType, Serial
     speed
     takeoff_alt
     connect()
@@ -26,16 +26,16 @@ classDiagram
     port : str
     takeoff_alt : int
   }
-  class Kinnect {
-    ip
-    port
+  class Kinect {
+    is_win
+    kinect : NoneType, PyKinectRuntime
+    pygame : NoneType
     connect()
     disconnect()
     getPosition()
   }
-  class KinnectConfig {
-    ip : str
-    port : int
+  class KinectConfig {
+    is_win : bool
   }
   class MotionConfig {
     debug_mode : int
@@ -58,7 +58,7 @@ classDiagram
     classifier
     configs
     drone
-    kinnect
+    kinect
     myoband : Myoband
     connect()
     disconnect()
@@ -73,11 +73,11 @@ classDiagram
   }
   Classifier --* Orchestrator : classifier
   Drone --* Orchestrator : drone
-  Kinnect --* Orchestrator : kinnect
+  Kinect --* Orchestrator : kinect
   Myoband --* Orchestrator : myoband
   Configs --* Orchestrator : configs
   DroneConfig --* Configs : drone
-  KinnectConfig --* Configs : kinnect
+  KinectConfig --* Configs : kinect
   MotionConfig --* Configs : motion
   MyobandConfig --* Configs : myoband
   RobotArmConfig --* Configs : robot_arm

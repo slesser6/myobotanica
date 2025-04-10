@@ -29,9 +29,8 @@ class MyobandConfig:
     verbose: bool
 
 @dataclass
-class KinnectConfig:
-    ip: str
-    port: int
+class KinectConfig:
+    is_win: bool
 
 @dataclass
 class Configs:
@@ -39,4 +38,4 @@ class Configs:
     robot_arm: RobotArmConfig
     motion: MotionConfig
     myoband: MyobandConfig
-    kinnect: KinnectConfig
+    kinect: KinectConfig
