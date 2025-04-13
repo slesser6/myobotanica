@@ -8,10 +8,9 @@ from src.kinematics import solve_ik
 class Orchestrator:
     def __init__(self):
         self.configs = load_config()
-        self.drone = Drone(self.configs.drone, self.configs.motion)
+        self.drone = Drone(self.configs.drone)
         self.myoband = Myoband(self.configs.myoband)
         self.kinect = Kinect(self.configs.kinect)
-        self.classifier = Classifier()
 
     def connect(self):
         self.myoband.connect()
@@ -23,15 +22,11 @@ class Orchestrator:
         self.kinect.disconnect()
         self.drone.disconnect()
 
-    def poll_sensors(self):
-        self.myoband.update()
-        classification = None
-        
-        if self.myoband.is_ready(50):
-            data_block = self.myoband.get_data(50)
-            classification = self.classifier.classify(data_block)
-        position = self.kinect.getPosition()
-        return classification, position
+    def loop(self):
+        self.myoband.loop()
+        self.kinect.loop()
+
+        return self.myoband.data_block, (self.kinect.left_pos, self.kinect.right_pos)
     
     def get_status(self):
         print(f""+self.drone.sendCommand("FC:GETSTATE\n", 3, True, "END_RESPONSE"))

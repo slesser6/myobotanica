@@ -8,16 +8,16 @@ class DroneConfig:
     port: str
     baud_rate: int
     takeoff_alt: int
+    debug_mode: bool
+    verbose: bool
+    enable: bool
 
 @dataclass
 class RobotArmConfig:
     base_height: float
     link_lengths: List[float]
-
-@dataclass
-class MotionConfig:
-    speed: str
-    debug_mode: int
+    verbose: bool
+    enable: bool
 
 @dataclass
 class MyobandConfig:
@@ -27,15 +27,16 @@ class MyobandConfig:
     sample_freq: float
     input_freq: float
     verbose: bool
+    enable: bool
 
 @dataclass
 class KinectConfig:
-    is_win: bool
+    verbose: bool
+    enable: bool
 
 @dataclass
 class Configs:
     drone: DroneConfig
     robot_arm: RobotArmConfig
-    motion: MotionConfig
     myoband: MyobandConfig
     kinect: KinectConfig

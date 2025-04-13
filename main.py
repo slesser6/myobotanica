@@ -8,7 +8,7 @@ def main():
 
     try:
         while(1):
-            classification, position = o.poll_sensors()
+            classification, position = o.loop()
 
             cmds = []
 
@@ -32,7 +32,7 @@ def main():
             
 
             # TODO: update this with the actual thresholds
-            if position is not None:
+            if position[0] is not None:
                 if not takeoff and position > 5: 
                     cmds.append((f"FC:TAKEOFF:{o.drone.takeoff_alt}\n", 15, True, "END_RESPONSE"))
                     takeoff = True
@@ -43,7 +43,8 @@ def main():
                 if takeoff and position < 5:
                     cmds.append(("FC:LAND\n", 10, True, "END_RESPONSE"))
                     takeoff = False
-
+    except KeyboardInterrupt:
+        print("Interrupt Caught. Exiting.")
     finally:
         o.disconnect()
         

@@ -2,14 +2,15 @@ drone:
   port: "COM10"
   baud_rate: 57600
   takeoff_alt: 2
+  verbose: true
+  debug_mode: true
+  enable: true
 
 robot_arm:
   base_height: 0.05
   link_lengths: [0.2, 0.2]
-
-motion:
-  speed: 1.0
-  debug_mode: true
+  verbose: true
+  enable: false
 
 myoband:
   ip: "192.168.1.10"
@@ -18,6 +19,8 @@ myoband:
   sample_freq: 1000.0
   input_freq: 200.0
   verbose: True
+  enable: true
 
 kinect:
-  is_win: true
+  verbose: true
+  enable: true

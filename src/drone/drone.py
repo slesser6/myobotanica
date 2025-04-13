@@ -1,20 +1,32 @@
 import serial 
 import time
+import logging
+from src.utils import get_logger
 class Drone:
-    def __init__(self, drone_cfg, motion_cfg):
-        self.baud_rate = drone_cfg.baud_rate
-        self.port = drone_cfg.port
-        self.takeoff_alt = drone_cfg.takeoff_alt
-        self.speed = motion_cfg.speed
-        self.debug_mode = motion_cfg.debug_mode
-        self.ser = None
+    def __init__(self, cfg):
+        self._logger = get_logger("Drone")
+        if cfg.verbose:
+            self._logger.setLevel(logging.DEBUG)
+        else:
+            self._logger.setLevel(logging.INFO)
+
+        self._baud_rate = cfg.baud_rate
+        self._port = cfg.port
+        self._takeoff_alt = cfg.takeoff_alt
+        self._debug_mode = cfg.debug_mode
+        self._enable = cfg.enable
+        self._serial_conn = None
 
     def connect(self):
+        if not self._enable:
+            self._logger.debug("Not enabled.")
+            return
+        
         try:
-            self.ser = serial.Serial(self.port, self.baud_rate, timeout=0.5)
-            print(f"\n[Drone] Connected to telemetry radio on {self.port} at {self.baud_rate} baud.")
+            self._serial_conn = serial.Serial(self._port, self._baud_rate, timeout=0.5)
+            self._logger.info(f"Connected to telemetry radio on {self._port} at {self._baud_rate} baud.")
         except Exception as e:
-            print(f"\n[Drone] Error opening serial port {self.port}: {e}")
+            self._logger.error(f"Error opening serial port {self._port}: {e}")
             return
         
         i = 0
@@ -22,9 +34,9 @@ class Drone:
             time.sleep(1)
             i += 1
         if self.sendCommand("FC:GETSTATE\n", 3, True, "END_RESPONSE").is_armable:
-            print(self.sendCommand(self.drone.sendCommand("FC:ARM\n", 10, True, "END_RESPONSE")))
+            self._logger.debug(self.sendCommand(self.drone.sendCommand("FC:ARM\n", 10, True, "END_RESPONSE")))
         else:
-            print("\n[DRONE] Drone is not armable.")
+            self._logger.warning("Drone is not armable.")
 
     def sendCommand(self, cmd, wait_time=2, expect_multi=False, end_keyword=None):
         """
@@ -40,34 +52,37 @@ class Drone:
         Returns:
             List[str]: A list of response lines received (excluding the end marker).
         """
-        if not self.ser:
-            print("\n[Drone] Connect to telemetry radio before sending commands") 
+        if not self._enable:
+            return
+        if not self._serial_conn:
+            self._logger.error("Connect to telemetry radio before sending commands") 
+            return
         
         # Flush any stale data before sending
-        self.ser.reset_input_buffer()
-        if self.debug_mode:
+        self._serial_conn.reset_input_buffer()
+        if self._debug_mode:
             while True:
-                answer = input(f"\n[Drone] Would you like to send this command: {cmd.strip()}? y/n: ").strip().lower()
+                answer = input(f"\nWould you like to send this command: {cmd.strip()}? y/n: ").strip().lower()
                 if answer == 'y':
                     break
                 elif answer == 'n':
-                    print(f"\n[Drone] Not sending")
+                    self._logger.debug("Not sending")
                     return
                 else:
-                    print("[Drone] Invalid input. Please enter 'y' or 'n'.")
+                    self._logger.info("Invalid input. Please enter 'y' or 'n'.")
 
-        print(f"\n[Drone] Sending command to RPi: {cmd.strip()}")
-        self.ser.write(cmd.encode())
+        self._logger.debug(f"Sending command to RPi: {cmd.strip()}")
+        self._serial_conn.write(cmd.encode())
 
         responses = []
         end_time = time.time() + wait_time
         while True:
-            if self.ser.in_waiting:
-                line = self.ser.readline().decode().strip()
+            if self._serial_conn.in_waiting:
+                line = self._serial_conn.readline().decode().strip()
                 # Check if we've reached the end marker
                 if end_keyword and line == end_keyword:
                     break
-                print(line)
+                self._logger.info(line)
                 responses.append(line)
                 # If not expecting multi-line responses, break after one line.
                 if not expect_multi:
@@ -77,7 +92,7 @@ class Drone:
                 break
             time.sleep(0.1)
         if not responses:
-            print("\n[Drone] No response (timeout).")
+            self._logger.warning("No response (timeout).")
         return responses
 
     def runScriptMode(self, cmds):
@@ -85,15 +100,17 @@ class Drone:
         Example script mode: sends a sequence of commands.
         Each command on the RPi side should append an end-of-response marker.
         """
-        # print("\n[Drone] Running preconfigured script...")
-
+        if not self._enable:
+            return
+        
         for cmd, wait_sec, end_kw in cmds:
             self.sendCommand(cmd, wait_time=wait_sec, expect_multi=True, end_keyword=end_kw)
             time.sleep(2)
-        # print("\n[Drone] Script mode complete.")
 
     
     def disconnect(self):
-        if self.ser is not None:
-            self.ser.close()
-        print("[Drone] Disconnected to telemetry radio")
+        if not self._enable:
+            return
+        if self._serial_conn is not None:
+            self._serial_conn.close()
+        self._logger.info("Disconnected from telemetry radio.")
