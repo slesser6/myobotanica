@@ -1,23 +1,144 @@
 # flight_controller.py
 from dronekit import connect, VehicleMode, LocationGlobalRelative
 from pymavlink import mavutil
+import dronekit_sitl
+from dronekit_sitl import SITL
 import time
 import io
 import logging
 
+# def set_home_location(vehicle, lat, lon, alt):
+#     """
+#     Sends MAV_CMD_DO_SET_HOME to set the vehicle's home position.
+#     Args:
+#         vehicle: DroneKit Vehicle instance.
+#         lat, lon, alt: Desired home coordinates.
+#     """
+#     msg = vehicle.message_factory.command_long_encode(
+#         0, 0,                                  # target system, target component
+#         mavutil.mavlink.MAV_CMD_DO_SET_HOME,     # command
+#         0,                                     # confirmation
+#         1,                                     # param 1: use the specified lat/lon/alt (1 = use specified location)
+#         0, 0, 0,                               # params 2-4: unused
+#         lat,                                   # param 5: latitude
+#         lon,                                   # param 6: longitude
+#         alt                                    # param 7: altitude
+#     )
+#     vehicle.send_mavlink(msg)
+#     vehicle.flush()
+#     print(f"Sent command to set home position to lat:{lat}, lon:{lon}, alt:{alt}")
+    
+def condition_yaw(vehicle, heading, relative=True, yaw_speed=0):
+    """
+    Send MAV_CMD_CONDITION_YAW message to set a new heading.
+    
+    Args:
+        vehicle: The DroneKit Vehicle instance.
+        heading: Target yaw in degrees.
+        relative: If True, the heading is relative to the current yaw. If False, it’s absolute.
+        yaw_speed: (Optional) Yaw speed in deg/s (0 lets autopilot auto-calculate).
+    """
+    if relative:
+        is_relative = 1  # Yaw relative to current heading
+    else:
+        is_relative = 0  # Absolute angle
+    
+    msg = vehicle.message_factory.command_long_encode(
+        0, 0,                                # target system, target component
+        mavutil.mavlink.MAV_CMD_CONDITION_YAW,# command
+        0,                                   # confirmation
+        heading,                             # param 1: target angle in degrees
+        yaw_speed,                           # param 2: speed (deg/s)
+        1,                                   # param 3: direction (-1: counterclockwise, 1: clockwise), 1 is common if heading is relative
+        is_relative,                         # param 4: relative offset (1) or absolute (0)
+        0, 0, 0)                             # param 5-7: not used
+    
+    vehicle.send_mavlink(msg)
+    vehicle.flush()     
+   
+
 class FlightController:
-    def __init__(self, connection_string='/dev/ttyAMA0', baud_rate=115200):
+    def __init__(self, connection_string='/dev/ttyAMA0', baud_rate=115200, simulation_mode=False):
+        """
+        Args:
+            connection_string (str): The string for connecting to the flight controller.
+            baud_rate (int): Baud rate for the connection.
+            simulation_mode (bool): If True, launches SITL and connects via its URL.
+        """
+        self.simulation_mode = simulation_mode
         self.connection_string = connection_string
         self.baud_rate = baud_rate
         self.vehicle = None
+        self.sitl = None  # Will hold the SITL instance if simulation_mode is enabled
 
     def connect(self):
+        # If simulation mode is enabled, start DroneKit SITL
+        if self.simulation_mode:
+            print("Starting DroneKit SITL simulation...")
+            try:
+                from dronekit_sitl import start_default
+            except ImportError as e:
+                print("Error: dronekit_sitl is not installed.")
+                raise e
+
+            # Create a SITL instance
+            self.sitl = SITL(path="/home/OctoDronePi/.dronekit/sitl/copter-3.3/apm")
+            # Launch SITL with a home position specified as "lat,lon,alt,yaw"
+            # Replace with your desired values. For example: 37.8719,-122.2585,100,0
+            home_args = ["--home", "37.8719,-122.2585,100,0"]
+            self.sitl.launch(home_args, await_ready=True, restart=True)           
+            
+            
+            # Update connection_string to the SITL instance's connection URL
+            self.connection_string = self.sitl.connection_string()
+            print("SITL started successfully with connection string:", self.connection_string)
+        
         print(f"Connecting to flight controller on {self.connection_string} at {self.baud_rate} baud...")
         self.vehicle = connect(self.connection_string, wait_ready=True, baud=self.baud_rate)
         print("Drone connected!")
+        print(f" Able to arm? {self.vehicle.is_armable}")
         print(f" Firmware: {self.vehicle.version}")
         print(f" Location: {self.vehicle.location.global_relative_frame}")
+        
+        # print("Frame related parameters:")
+        # for key, value in self.vehicle.parameters.items():
+        #     if "frame" in key.lower() or "mot" in key.lower():
+        #         print(f"{key}: {value}")        
+        if self.simulation_mode:       
+            print("Origional frame parameters:")
+            print("FRAME_CLASS:", self.vehicle.parameters.get('FRAME_CLASS'))
+            print("FRAME_TYPE:", self.vehicle.parameters.get('FRAME_TYPE'))                
+                    
+            print("Overriding frame parameters for multicopter setup...")
+            # https://ardupilot.org/copter/docs/parameters.html
+            self.vehicle.parameters['FRAME_CLASS'] = 1  # 1 indicates a quadcopter
+            self.vehicle.parameters['FRAME_TYPE'] = 1   # 1 denotes x-frame
+            time.sleep(2)
+            print("Updated frame parameters:")
+            print("FRAME_CLASS:", self.vehicle.parameters.get('FRAME_CLASS'))
+            print("FRAME_TYPE:", self.vehicle.parameters.get('FRAME_TYPE'))  
+                 
+            # After connecting and verifying the initial state:
+            # print("global_relative_frame before update:", self.vehicle.location.global_relative_frame)
+            # set_home_location(self.vehicle, 37.8719, -122.2585, 10)
+            # time.sleep(10)  # Wait a few seconds for the vehicle to update its position estimate
 
+            print("\nHome location: %s" % self.vehicle.home_location)
+            print("Global Frame", self.vehicle.location.global_frame)
+            print("Current GPS Fix (global_relative_frame):", self.vehicle.location.global_relative_frame)            
+
+            # Home location must be within 50km of EKF home location (or setting will fail silently)
+            # In this case, just set value to current location with an easily recognisable altitude (222)
+            my_location_alt = self.vehicle.location.global_frame
+            my_location_alt.lat = 37.8719
+            my_location_alt.lon = -122.2585
+            my_location_alt.alt = 100.0
+            self.vehicle.home_location = my_location_alt
+            time.sleep(2)
+            print(" New Home Location (from attribute - altitude should be 100): %s" % self.vehicle.home_location)
+            
+
+                                        
     def send_command(self, command):
         # Split command by colon to identify sub-commands or parameters.
         parts = command.strip().split(":")
@@ -26,13 +147,13 @@ class FlightController:
         if cmd == "GETSTATE":
             return self.get_state()
         elif cmd == "ARM":
-            return self.arm_drone(timeout=10)
+            return self.arm_drone(timeout=20)
         elif cmd == "TAKEOFF":
             # Use provided altitude if available; otherwise, use a default (e.g., 5.0 meters)
             if len(parts) > 1 and parts[1]:
                 alt = float(parts[1])
             else:
-                alt = 5.0  # Default altitude (adjust this value as needed)
+                alt = 2.0  # DEFAULT ALTITUDE [m]
             return self.takeoff_drone(alt, timeout=10)
         elif cmd == "MOVE":
             # Allow legacy command format: e.g., "FC:MOVE:FWD"
@@ -63,7 +184,6 @@ class FlightController:
             print(f"Unknown FC command: {command}")
             return None
 
-
     def get_state(self):
         print("Querying flight controller for state...")
         state_info = (
@@ -77,35 +197,66 @@ class FlightController:
         # Append end-of-response marker
         return state_info + "\nEND_RESPONSE"
 
-    
     def arm_drone(self, timeout=10):
         """
         Attempts to arm the drone in GUIDED mode.
-        Captures CRITICAL logging messages during arming.
-        Returns a multi-line string with status and any warnings, terminated by END_RESPONSE.
+        Debugs pre-arm status and optionally disables checks for simulation.
         """
-        # Create an in-memory stream and attach a handler to capture CRITICAL logs.
+        import time
+
+        # Attach logging to capture critical messages (for debugging purposes).
         log_capture = io.StringIO()
         ch = logging.StreamHandler(log_capture)
         ch.setLevel(logging.CRITICAL)
-        logger = logging.getLogger()  # Capture from the root logger.
+        logger = logging.getLogger()
         logger.addHandler(ch)
 
         messages = []
         messages.append("Arming drone...")
-        self.vehicle.mode = VehicleMode("GUIDED")
-        self.vehicle.armed = True
 
+        # Set the desired mode and allow time for initialization
+        print("Setting mode to GUIDED...")
+        self.vehicle.mode = VehicleMode("GUIDED")
+        
+        print("Home Location:", self.vehicle.home_location)
+        
+        if self.simulation_mode:
+            # Optionally disable pre-arm checks in simulation (not for real flights)
+            print("Disabling pre-arm checks for simulation (ARMING_CHECK=0)...")
+            self.vehicle.parameters['ARMING_CHECK'] = 0
+        
+        time.sleep(2)  # Allow a moment for mode to update
+        
+        # Debug logging for sensor and GPS status.
+        print("DEBUG: Initial is_armable:", self.vehicle.is_armable)
+        print("DEBUG: Vehicle mode:", self.vehicle.mode.name)
+        print("DEBUG: Vehicle armed:", self.vehicle.armed)
+        print("DEBUG: GPS Fix:", self.vehicle.gps_0.fix_type)
+        print("DEBUG: GPS Satellites:", self.vehicle.gps_0.satellites_visible)
+        print("FRAME_CLASS:", self.vehicle.parameters.get('FRAME_CLASS'))
+        print("FRAME_TYPE:", self.vehicle.parameters.get('FRAME_TYPE'))
+        
+        # Wait until the vehicle becomes armable, with a longer timeout for SITL initialization.
         start_time = time.time()
-        while not self.vehicle.armed and (time.time() - start_time) < timeout:
+        while not self.vehicle.is_armable and (time.time() - start_time) < timeout:
+            print("DEBUG: Still not armable. is_armable:", self.vehicle.is_armable)
+            time.sleep(1)
+
+        if not self.vehicle.is_armable:
+            print("DEBUG: Drone not armable after waiting.")
+            logger.removeHandler(ch)
+            return "Drone not armable\nEND_RESPONSE"
+        
+        # Try to arm the vehicle.
+        self.vehicle.armed = True
+        arm_start_time = time.time()
+        while not self.vehicle.armed and (time.time() - arm_start_time) < timeout:
             msg = "Waiting for arming..."
             print(msg)
             messages.append(msg)
             time.sleep(1)
 
-        # Remove the temporary logging handler.
         logger.removeHandler(ch)
-        # Retrieve any CRITICAL messages captured during arming.
         captured_logs = log_capture.getvalue()
         if captured_logs:
             messages.append("Captured warnings:")
@@ -119,12 +270,11 @@ class FlightController:
         messages.append("END_RESPONSE")
         return "\n".join(messages)
 
-    
+
     def takeoff_drone(self, altitude, timeout=10):
         '''
         Function to have drone takeoff to a specified height [m]. Drone will attempt to arm itself if not armed. 
         '''
-        
         responses = []
         # If not armed, attempt to arm.
         if not self.vehicle.armed:
@@ -152,8 +302,7 @@ class FlightController:
 
         responses.append("END_RESPONSE")
         return "\n".join(responses)
-    
-    
+
     def move_drone(self, direction):
         # Pre-programmed constants for movement.
         DEFAULT_MOVE_VELOCITY = 1    # meters per second
@@ -204,20 +353,15 @@ class FlightController:
         else:
             return f"Unknown MOVE command: {direction}\nEND_RESPONSE"
 
-                
     def yaw_drone(self, direction):
-        # Pre-programmed yaw angle (in degrees)
         DEFAULT_YAW_ANGLE = 15
 
-        # Check that the drone is armed.
         if not self.vehicle.armed:
             return "Drone is not armed.\nEND_RESPONSE"
-        
-        # Check if the drone is in GUIDED mode; if not, attempt to change.
+
         if self.vehicle.mode.name.upper() != "GUIDED":
             print("Drone is not in GUIDED mode. Attempting to change mode to GUIDED...")
             self.vehicle.mode = VehicleMode("GUIDED")
-            # Wait up to 3 seconds for mode change.
             wait_time = 3
             start_time = time.time()
             while self.vehicle.mode.name.upper() != "GUIDED" and (time.time() - start_time) < wait_time:
@@ -227,15 +371,13 @@ class FlightController:
             else:
                 print("Drone mode changed to GUIDED.")
 
-        # Determine yaw angle based on direction.
-        # Accept both full commands and the simple LEFT/RIGHT tokens.
         if direction.upper() in ["YAWLEFT", "LEFT"]:
             print(f"Yawing left {DEFAULT_YAW_ANGLE} degrees...")
-            self.vehicle.condition_yaw(-DEFAULT_YAW_ANGLE, relative=True)
+            condition_yaw(self.vehicle, -DEFAULT_YAW_ANGLE, relative=True)
             return "Drone yawed left.\nEND_RESPONSE"
         elif direction.upper() in ["YAWRIGHT", "RIGHT"]:
             print(f"Yawing right {DEFAULT_YAW_ANGLE} degrees...")
-            self.vehicle.condition_yaw(DEFAULT_YAW_ANGLE, relative=True)
+            condition_yaw(self.vehicle, DEFAULT_YAW_ANGLE, relative=True)
             return "Drone yawed right.\nEND_RESPONSE"
         else:
             return f"Unknown YAW command: {direction}\nEND_RESPONSE"
@@ -248,3 +390,13 @@ class FlightController:
     def play_tune(self, tune):
         print(f"Playing tune on FC (simulated): {tune}")
         return f"Playing tune: {tune}\nEND_RESPONSE"
+
+    def close(self):
+        """
+        Optionally call this method to shut down SITL (if running) and clean up the connection.
+        """
+        if self.vehicle:
+            self.vehicle.close()
+        if self.sitl:
+            print("Stopping SITL simulation...")
+            self.sitl.stop()

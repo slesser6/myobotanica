@@ -18,7 +18,11 @@ def main():
     receiver.start()
 
     # Initialize the FlightController (MAVLink / DroneKit interface)
-    fc = FlightController(connection_string='/dev/ttyAMA0', baud_rate=115200)
+    ### --- COMMENT / UNCOMMENT to run in simulation mode or to connect to FC
+    # Connect to FC 
+    # fc = FlightController(connection_string='/dev/ttyAMA0', baud_rate=115200, simulation_mode=False) 
+    # Run in Simulation mode
+    fc = FlightController(connection_string='/dev/ttyAMA0', baud_rate=115200, simulation_mode=True) 
     fc.connect()
 
     # # Initialize the Arduino controller (for water arm servos & pump)
@@ -52,6 +56,7 @@ def main():
 
             time.sleep(0.1)
         except KeyboardInterrupt:
+            fc.close()
             print("Shutting down...")
             break
 
