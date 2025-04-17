@@ -1,0 +1,2 @@
+[console_scripts]
+flightComputer = flightComputer.__main__:main
