@@ -1,0 +1,39 @@
+gcs/                           ← new package
+│
+├── __init__.py                (empty or version string)
+│
+├── spec.py                    ← purely “data & constants”
+│   • CommandSpec              (dataclass)
+│   • COMMANDS dict            (imported by both CLI & GUI)
+│   • EXIT_KEY                 (0)
+│
+├── comms.py                   ← all serial I/O helpers
+│   • send_command()
+│   • run_script_mode()
+│   • interactive_move_handler()
+│
+├── menu.py                    ← CLI presentation logic
+│   • print_menu()
+│   • prompt_user()
+│   • execute_command()
+│
+├── cli.py                     ← tiny entry point (was menu_loop + main)
+│   • menu_loop()
+│   • main()
+│
+├── gui.py                     ← your Tkinter GUI (renamed from gcs_gui.py)
+│
+└── handlers/                  ← optional “flight‑controller side” code,
+    └── __init__.py               if you later run FC inside the same repo
+
+
+Need tomorrow 								Where it goes
+Add a command								edit COMMANDS in spec.py only
+Unit tests									create tests/ and import from gcs.*
+Multiple serial back‑ends (UDP, GSM, …)		new module gcs/transports/*.py, swap in comms.send_command
+Settings file								gcs/config.py and import in cli.py, gui.py
+Installable package							add pyproject.toml with gcs as the package; cli.py becomes a console‑script entry point (gcs-cli)
+
+Take-away rule:
+One file ≈ one responsibility.
+Your future self (or teammate) can now open spec.py to tweak commands, comms.py to diagnose serial glitches, or menu.py for UI tweaks—without scrolling through 300 lines of unrelated code.
