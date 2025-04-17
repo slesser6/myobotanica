@@ -1,0 +1,6 @@
+Metadata-Version: 2.1
+Name: flightComputer
+Version: 0.1.0
+Requires-Dist: pyserial>=3.5
+Requires-Dist: dronekit
+Requires-Dist: pymavlink
