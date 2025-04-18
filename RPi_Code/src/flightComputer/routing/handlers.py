@@ -4,8 +4,6 @@ from flightComputer import config
 from .bus import BUS
 from flightComputer.fc import FC
 
-
-
 ARD = ArduinoController(config.SERIAL_ARDUINO_PORT,
                         config.SERIAL_ARDUINO_BAUD)
 

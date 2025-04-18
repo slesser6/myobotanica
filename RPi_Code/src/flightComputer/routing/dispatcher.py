@@ -8,15 +8,19 @@ class Dispatcher(threading.Thread):
     def __init__(self):
         super().__init__(daemon=True)
         self.log = logging.getLogger("Dispatcher")
-        self.radio = RadioReceiver(SERIAL_RADIO_PORT,
-                                   SERIAL_RADIO_BAUD,
-                                   BUS)
+        # self.radio = RadioReceiver(SERIAL_RADIO_PORT,
+        #                            SERIAL_RADIO_BAUD,
+        #                            BUS)
+        self.radio = RadioReceiver(SERIAL_RADIO_PORT, SERIAL_RADIO_BAUD, BUS)
         self.radio.start()
 
     def run(self):
         while True:
             try:
                 cmd = BUS.get(timeout=0.5)        # ❶ unblockable loop
+                # ignore telemetry JSON blobs (they start with "{")
+                if cmd.lstrip().startswith("{"):
+                    continue
             except queue.Empty:
                 continue                          # nothing to do, loop
             if cmd == "__QUIT__":                 # ❷ graceful stop token
@@ -29,7 +33,11 @@ class Dispatcher(threading.Thread):
                 try:
                     resp = func(payload)
                     if resp:
-                        self.radio.send(resp)
+                        self.radio.send(resp) # Send command response
+                                        
+                        from flightComputer.fc import FC
+                        FC._telem_suspended.clear() # Resume telemetry
+                        
                 except Exception as e:           # ❸ protect handler errors
                     self.log.error("Handler %s blew up: %s", prefix, e)
             else:
