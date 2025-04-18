@@ -21,19 +21,18 @@ gcs/                           ← new package
 │   • menu_loop()
 │   • main()
 │
-├── gui.py                     ← your Tkinter GUI (renamed from gcs_gui.py)
+├── gui.py                     ← Tkinter GUI (renamed from gcs_gui.py)
 │
 └── handlers/                  ← optional “flight‑controller side” code,
-    └── __init__.py               if you later run FC inside the same repo
+    └── __init__.py               
 
 
 Need tomorrow 								Where it goes
 Add a command								edit COMMANDS in spec.py only
 Unit tests									create tests/ and import from gcs.*
-Multiple serial back‑ends (UDP, GSM, …)		new module gcs/transports/*.py, swap in comms.send_command
+Multiple serial back-ends (UDP, GSM, …)		new module gcs/transports/*.py, swap in comms.send_command
 Settings file								gcs/config.py and import in cli.py, gui.py
 Installable package							add pyproject.toml with gcs as the package; cli.py becomes a console‑script entry point (gcs-cli)
 
-Take-away rule:
-One file ≈ one responsibility.
-Your future self (or teammate) can now open spec.py to tweak commands, comms.py to diagnose serial glitches, or menu.py for UI tweaks—without scrolling through 300 lines of unrelated code.
+Take-away principle for refactor: One file ≈ one responsibility.
+Future self (or teammate) can now open spec.py to tweak commands, comms.py to diagnose serial glitches, or menu.py for UI tweaks—without scrolling through 300 lines of unrelated code.

@@ -1,0 +1,16 @@
+sudo apt-get update
+sudo apt-get install git build-essential python3-dev python3-pip libxml2-dev libxslt1-dev python3-wxgtk4.0 python3-numpy
+git clone https://github.com/ArduPilot/ardupilot.git
+cd ardupilot
+git submodule update --init --recursive
+Tools/environment_install/install-prereqs-ubuntu.sh -y
+. ~/.profile
+cd ArduCopter
+./waf configure --board sitl
+python3 -m pip install pexpect
+./waf
+ls -l ~/Desktop/myobotanica/myobotanica/RPi_Code/ardupilot/build/sitl/bin/
+mkdir -p /home/OctoDronePi/.dronekit/sitl/copter-3.3/
+ln -sf /path/to/ardupilot/ArduCopter/build/sitl/bin/arducopter /home/OctoDronePi/.dronekit/sitl/copter-3.3/apm
+~/.dronekit/sitl/copter-3.3/apm --help
+

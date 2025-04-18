@@ -1,0 +1,21 @@
+sudo nano /etc/systemd/system/drone.service # Edit service file 
+sudo systemctl daemon-reload				# Reload daemons (needed after service file is modified) 
+sudo systemctl restart drone.service		# Restart the drone service
+sudo systemctl enable --now drone.service 	# start immediately and on boot
+sudo systemctl status drone.service			# See status of service (is it running or not?)
+journalctl -u drone.service -f           	# live tail - see live log of drone service 
+
+dmesg | grep ttyUSB							# See what usb devices are connected and what port they are on 
+netstat -an | grep 5760						# See what services are utilizing 5760 port (the FC simulator port) 
+
+python -m flightComputer					# Launch flightComputer package manually (outside of service / daemon) 
+python -m pip list | grep flightComputer	# 
+python -m pi								#
+
+source /home/OctoDronePi/Desktop/myobotanica/myobotanica/RPi_Code/venv_py38/bin/activate # Activate the virtual environment 
+
+git pull									# Pull down latest changes in repo
+git add ./									# Add all changed files to staging 
+git commit -m "Description of changes" 		# Add a description of changes 
+git push									# push changes to GitHub
+git remote set-url origin https://alex-heigl@github.com/slesser6/myobotanica.git

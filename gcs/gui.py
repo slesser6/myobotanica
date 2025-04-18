@@ -7,15 +7,13 @@ gcs_gui.py – quick‑and‑dirty GUI wrapper around your CommandSpec table
 * When a command needs parameters, a small dialog pops up
 * Serial I/O happens in a background thread so the GUI never freezes
 """
-import queue
-import threading
 import tkinter as tk
 from tkinter import ttk, simpledialog, scrolledtext, messagebox
+import serial, json, queue, threading
+# gcs_gui.py
+from gcs.spec   import CommandSpec, COMMANDS   # definition table
+from gcs.comms  import send_command            # serial helper
 
-import serial
-from drone_ground_station import (
-    CommandSpec, COMMANDS, send_command   # <-- import from your script
-)
 
 # ─────────────────────── Serial Worker Thread ────────────────────────
 class SerialWorker(threading.Thread):
@@ -34,6 +32,21 @@ class SerialWorker(threading.Thread):
                 self.rx_queue.put(self.ser.readline().decode(errors='ignore'))
             else:
                 self._stop.wait(0.05)
+                
+                
+def show_state(self, st: dict) -> None:
+    vals = (
+        st["mode"],
+        st["armed"],
+        st["gps"]["sats_visible"],
+        st["battery"]["level"],
+        f'{st["location"]["lat"]:.5f}',
+        f'{st["location"]["lon"]:.5f}',
+        f'{st["location"]["alt"]:.1f}',
+        f'{st["attitude"]["yaw"]:.0f}°',
+    )
+    self.tree.item("row", values=vals)
+                
 
 # ────────────────────────────   GUI  ─────────────────────────────────
 class GCSGui(tk.Tk):
@@ -115,10 +128,28 @@ class GCSGui(tk.Tk):
             b.config(state="normal")
         self.log(f"Connected on {self.ser.port} @ {self.ser.baudrate}")
 
+    # def _poll_queue(self):
+    #     while not self.rx_queue.empty():
+    #         self.log(self.rx_queue.get().rstrip())
+    #     self.after(100, self._poll_queue)
+    
     def _poll_queue(self):
         while not self.rx_queue.empty():
-            self.log(self.rx_queue.get().rstrip())
-        self.after(100, self._poll_queue)
+            line = self.rx_queue.get().rstrip()
+
+            if line.startswith("{") and line.endswith("}"):
+                # looks like the new JSON state → pretty‑print / render
+                try:
+                    state = json.loads(line)
+                except json.JSONDecodeError:
+                    self.log(f"⚠  bad JSON: {line}")
+                else:
+                    self.show_state(state)      # <‑‑ new helper (see below)
+            else:
+                # plain text → dump to console
+                self.log(line)
+
+        self.after(100, self._poll_queue)    
 
     # ==========  command handling  ========== #
     def handle_command(self, key: str):

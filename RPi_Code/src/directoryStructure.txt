@@ -1,0 +1,50 @@
+flightComputer/                  ← Python package  (pip install -e .)
+│
+├── __init__.py                  ← empty (or version string)
+├── __main__.py                  ← tiny entry point – starts the system
+│
+├── config.py                    ← all tunables (ports, baud, SIM mode…)
+│
+├── util/
+││   ├── __init__.py
+││   └── log.py                  ← init() sets global logging format/level
+│
+├── io/                          ← “anything with a physical connector”
+││   ├── __init__.py
+││   ├── serial_link.py          ← reusable base for every serial device
+││   ├── radio.py                ← RadioReceiver  (old command_receiver.py)
+││   └── arduino.py              ← ArduinoController
+│
+├── fc/                          ← flight‑controller domain
+││   ├── __init__.py             ← exposes a singleton FC object
+││   ├── mavlink_fc.py           ← FlightController class
+││   └── sitl.py                 ← helper that launches DroneKit‑SITL
+│
+├── routing/                     ← glue that moves strings around
+││   ├── __init__.py
+││   ├── bus.py                  ← shared Queue (message bus)
+││   ├── handlers.py             ← maps prefixes “FC:”, “AR:” → callables
+││   └── dispatcher.py           ← background thread, pops bus, dispatches
+│
+├── autonomy/                    ← future on‑board logic (OpenCV, missions)
+││   ├── __init__.py
+││   └── mission.py              ← placeholder for waypoint/vision planner
+│
+└── pyproject.toml               ← makes it installable / runnable as `flightComputer`
+
+                +----------+                 +-------------+
+ground station →|  Radio   | → BUS → Dispatcher → Handlers →|  FlightCtrl |
+                +----------+                 +-------------+              |
+                        ↑                                                 |
+                        |                           +-----------+         |
+                        |                           |  Arduino  | ←------<+
+                    responses                       +-----------+
+
+io knows only about bytes on wires.
+
+fc knows everything about MAVLink / DroneKit and nothing about radios or Arduinos.
+
+routing is the “traffic cop” – the only place prefixes are interpreted.
+
+autonomy can inject its own commands onto the BUS later (“AUTO:…”).
+
