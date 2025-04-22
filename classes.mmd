@@ -1,20 +1,18 @@
 classDiagram
-  class Classifier {
-    classify()
+  class Classification {
+    name
+  }
+  class ColorLogger {
+    format(record)
   }
   class Configs {
     drone
     kinect
-    motion
     myoband
+    orchestrator
     robot_arm
   }
   class Drone {
-    baud_rate
-    debug_mode
-    port
-    ser : NoneType, Serial
-    speed
     takeoff_alt
     connect()
     disconnect()
@@ -23,30 +21,33 @@ classDiagram
   }
   class DroneConfig {
     baud_rate : int
+    debug_mode : bool
+    enable : bool
     port : str
     takeoff_alt : int
+    verbose : bool
   }
   class Kinect {
-    is_win
-    kinect : NoneType, PyKinectRuntime
-    pygame : NoneType
+    left_pos : NoneType
+    right_pos : NoneType
     connect()
     disconnect()
-    getPosition()
+    loop()
   }
   class KinectConfig {
-    is_win : bool
+    enable : bool
+    verbose : bool
   }
-  class MotionConfig {
-    debug_mode : int
-    speed : str
-  }
-  class Myoband {
+  class MyoUdp {
+    data_block : NoneType, ndarray
     connect()
     disconnect()
-    getData()
+    get_rotation_matrix()
+    loop()
+    quaternion_to_rotation_matrix(q)
   }
-  class MyobandConfig {
+  class MyoUdpConfig {
+    enable : bool
     input_freq : float
     ip : str
     port1 : int
@@ -54,30 +55,46 @@ classDiagram
     sample_freq : float
     verbose : bool
   }
+  class Myoband {
+    classification : ELBOW_EXT, GRASP, UNKNOWN, WRIST_EXT, WRIST_FLEX, WRIST_ROT_IN, WRIST_ROT_OUT
+    connect()
+    disconnect()
+    loop()
+  }
+  class MyobandConfig {
+    enable : bool
+    host : str
+    port : int
+    verbose : bool
+  }
   class Orchestrator {
-    classifier
-    configs
     drone
     kinect
-    myoband : Myoband
+    myoband
+    polling_period : int
+    verbose : bool
     connect()
     disconnect()
     get_status()
-    poll_sensors()
+    loop()
     run_calculations(desired_pos)
     send_output(cmds)
   }
+  class OrchestratorConfig {
+    polling_period : int
+    verbose : bool
+  }
   class RobotArmConfig {
     base_height : float
+    enable : bool
     link_lengths : List[float]
+    verbose : bool
   }
-  Classifier --* Orchestrator : classifier
   Drone --* Orchestrator : drone
   Kinect --* Orchestrator : kinect
   Myoband --* Orchestrator : myoband
-  Configs --* Orchestrator : configs
   DroneConfig --* Configs : drone
   KinectConfig --* Configs : kinect
-  MotionConfig --* Configs : motion
   MyobandConfig --* Configs : myoband
+  OrchestratorConfig --* Configs : orchestrator
   RobotArmConfig --* Configs : robot_arm

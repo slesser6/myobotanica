@@ -21,7 +21,9 @@ classDiagram
   }
   class kinect {
   }
-  class myoband {
+  class myo_listener {
+  }
+  class myo_udp {
   }
   class utils {
   }
@@ -29,17 +31,23 @@ classDiagram
   }
   class dataclasses {
   }
+  class logger {
+  }
   classifier --> classifier
   drone --> drone
+  drone --> utils
   kinematics --> forward
   kinematics --> inverse
-  orchestrator --> classifier
   orchestrator --> drone
-  orchestrator --> kinematics
   orchestrator --> sensors
   orchestrator --> utils
   sensors --> kinect
-  sensors --> myoband
+  sensors --> myo_listener
+  kinect --> utils
+  myo_listener --> classifier
+  myo_listener --> utils
+  myo_udp --> utils
   utils --> config_loader
+  utils --> logger
   config_loader --> dataclasses
   dataclasses --> dataclasses
