@@ -1,5 +1,5 @@
 import roboticstoolbox as rtb
-import spatialmath as SE3
+from spatialmath import *
 import numpy as np
 import matplotlib.pyplot as plt
 import matlab.engine
@@ -10,20 +10,21 @@ import socket
 
 l = [
     rtb.RevoluteDH(
-        d = -4,
-        alpha = np.pi/2
+        d = -2,
+        alpha = np.pi/2,
+        qlim = [-np.pi, np.pi]
     ),
     rtb.RevoluteDH(
-        a = 4,
+        a = 3,
     ),
     rtb.RevoluteDH(
-        a = 4,
+        a = 3,
     )
 ]
 
 
 bot = rtb.DHRobot(links = l)
-q = [0, 0, 0]
+
 
 # matlabCode = input("Enter the matlab engine name:")
 
@@ -42,6 +43,9 @@ def start_server(host='localhost', port=65432):
         s.listen()
         print(f"Server started at {host}:{port}")
         conn, addr = s.accept()
+        q = [0, -np.pi/4, np.pi/4]
+        position = bot.fkine(q) #initial position
+        new_position = position
         with conn:
             print(f"Connected by {addr}")
             while True:
@@ -55,29 +59,43 @@ def start_server(host='localhost', port=65432):
                 # decode what we got and do something with it
                 found = True
                 if (value == "Wrist Rotate In"):
-                    q[0] = q[0] - np.pi/50
+                    print("turning right")
+                    new_position = SE3.Rz(np.pi/8) * position
                 elif (value == "Wrist Rotate Out"):
-                    q[0] = q[0] + np.pi/50
-                elif (value == "Elbow Flexion"):
-                    q[1] = q[1] + np.pi/50
-                elif (value == "Elbow Extension"):
-                    q[1] = q[1] - np.pi/50
+                    print("turning left")
+                    new_position = SE3.Rz(-np.pi/8) * position
+                # elif (value == "Elbow Flexion"):
+                #     q[1] = q[1] + np.pi/50
+                # elif (value == "Elbow Extension"):
+                #     q[1] = q[1] - np.pi/50
                 elif (value == "Wrist Flex In"):
-                    q[2] = q[2] - np.pi/50
+                    print("arm going down")
+                    new_position = position + SE3(0, 0, -.25)
                 elif (value == "Wrist Extend Out"):
-                    q[2] = q[2] + np.pi/50
+                    print("arm going up")
+                    new_position = position + SE3(0, 0, .25)
                 elif (value == "Power Grasp"):
                     print("Spraying water")
                 else:
                     found = False
                 if found:
-                    bot.plot(q)
+                    results = bot.ik_LM(Tep = new_position, mask = [1, 1, 1, 0, 0, 0], joint_limits = True)
+                    print(new_position)
+                    print(results)
+                    if (results[1]):
+                        print("updating position")
+                        traj_q = rtb.jtraj(q0 = q, qf = results[0], t = 20)
+                        position = new_position
+                        q = results[0]
+                        bot.plot(traj_q.q, dt=0.1, backend = 'pyplot')
                 
-
+                print(position)
+                plt.pause(2)
+                # time.sleep(4)
 
 
                 # Add your gimbal control logic here
 if __name__ == "__main__":
+    plt.figure(1)
     plt.ion()
-    bot.plot(q)
     start_server()
