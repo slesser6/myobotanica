@@ -4,7 +4,7 @@ drone:
   takeoff_alt: 2
   verbose: true
   debug_mode: true
-  enable: true
+  enable: false
 
 robot_arm:
   base_height: 0.05
@@ -12,15 +12,25 @@ robot_arm:
   verbose: true
   enable: false
 
-myoband:
+myoudp:
   ip: "192.168.1.10"
   port1: 15001
   port2: 15002
   sample_freq: 1000.0
   input_freq: 200.0
-  verbose: True
+  verbose: true
+  enable: false
+
+myoband:
+  host: "localhost"
+  port: 65432
+  verbose: true
   enable: true
 
 kinect:
   verbose: true
   enable: true
+
+orchestrator:
+  verbose: true
+  polling_period: 1

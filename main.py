@@ -1,4 +1,6 @@
 from src.orchestrator import Orchestrator
+from src.classifier import Classification
+import time
 
 def main():
 
@@ -12,37 +14,43 @@ def main():
 
             cmds = []
 
-            # TODO: update this with he actual classifications and servo values
-            if classification == "":
+            if classification == Classification.WRIST_ROT_IN:
                 cmds.append((f"FC:YAW:LEFT\n", 5, True, "END_RESPONSE"))
-            elif classification == "":
+            elif classification == Classification.WRIST_ROT_OUT:
                 cmds.append((f"FC:YAW:RIGHT\n", 5, True, "END_RESPONSE"))
-            elif classification == "":
+            elif classification == Classification.WRIST_FLEX:
+                cmds.append((f"FC:PITCH:DOWN\n", 5, True, "END_RESPONSE"))
+            elif classification == Classification.WRIST_EXT:
+                cmds.append((f"FC:PITCH:UP:RIGHT\n", 5, True, "END_RESPONSE"))
+            elif classification == Classification.ELBOW_FLEX:
+                joint_positions = o.run_calculations(0)
+                cmds.append((f"AR:SERVO:0:{joint_positions[0]}\n", 3, True, "END_RESPONSE"))
+                cmds.append((f"AR:SERVO:1:{joint_positions[1]}\n", 3, True, "END_RESPONSE"))
+            elif classification == Classification.ELBOW_EXT:
+                joint_positions = o.run_calculations(0)
+                cmds.append((f"AR:SERVO:0:{joint_positions[0]}\n", 3, True, "END_RESPONSE"))
+                cmds.append((f"AR:SERVO:1:{joint_positions[1]}\n", 3, True, "END_RESPONSE"))
+
+            if classification == Classification.GRASP:
                 cmds.append((f"AR:PUMP:ON\n", 3, True, "END_RESPONSE"))
-            elif classification == "":
+            else:
                 cmds.append((f"AR:PUMP:OFF\n", 3, True, "END_RESPONSE"))
-            elif classification == "":
-                joint_positions = o.run_calculations(0)
-                cmds.append((f"AR:SERVO:0:{joint_positions[0]}\n", 3, True, "END_RESPONSE"))
-                cmds.append((f"AR:SERVO:1:{joint_positions[1]}\n", 3, True, "END_RESPONSE"))
-            elif classification == "":
-                joint_positions = o.run_calculations(0)
-                cmds.append((f"AR:SERVO:0:{joint_positions[0]}\n", 3, True, "END_RESPONSE"))
-                cmds.append((f"AR:SERVO:1:{joint_positions[1]}\n", 3, True, "END_RESPONSE"))
             
 
             # TODO: update this with the actual thresholds
-            if position[0] is not None:
-                if not takeoff and position > 5: 
+            if position[1] is not None:
+                if not takeoff and position[1].z > 0.5: 
                     cmds.append((f"FC:TAKEOFF:{o.drone.takeoff_alt}\n", 15, True, "END_RESPONSE"))
                     takeoff = True
-                if takeoff and position > 5:
+                if takeoff and position[1].y > 0.5:
                     cmds.append((f"FC:MOVE:FWD\n", 5, True, "END_RESPONSE"))
-                if takeoff and position < 5:
+                if takeoff and position[1].y < -0.5:
                     cmds.append((f"FC:MOVE:BACK\n", 5, True, "END_RESPONSE"))
-                if takeoff and position < 5:
+                if takeoff and position[1].z < -0.5:
                     cmds.append(("FC:LAND\n", 10, True, "END_RESPONSE"))
                     takeoff = False
+
+            time.sleep(o.polling_period)
     except KeyboardInterrupt:
         print("Interrupt Caught. Exiting.")
     finally:

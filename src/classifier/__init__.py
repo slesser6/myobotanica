@@ -1,3 +1,1 @@
-from .classifier import Classifier
-
-# pull in the model
+from .classifier import Classification

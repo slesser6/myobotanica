@@ -46,9 +46,9 @@ class Kinect:
             pygame.display.set_caption("Kinect for Windows v2")
             self._kinect = PyKinectRuntime.PyKinectRuntime(PyKinectV2.FrameSourceTypes_Color | PyKinectV2.FrameSourceTypes_Body)
             self._frame_surface = pygame.Surface((self._kinect.color_frame_desc.Width, self._kinect.color_frame_desc.Height), 0, 32)
-            self._logger.info("Connected.")
+            self._logger.info("Connected")
         else:
-            self._logger.debug("Not enabled.")
+            self._logger.debug("Not enabled")
 
     def loop(self):
         if self._enable and self._kinect is not None:                    
@@ -89,7 +89,7 @@ class Kinect:
             if self.left_pos is not None:
                 self._logger.debug(f"Left Hand: x={self.left_pos.x:.2f}, y={self.left_pos.y:.2f}, z={self.left_pos.z:.2f}")
             else:
-                self._logger.debug(f"Left hand not found.")
+                self._logger.debug(f"Left hand not found")
             if self.right_pos is not None:
                 self._logger.debug(f"Right Hand: x={self.right_pos.x:.2f}, y={self.right_pos.y:.2f}, z={self.right_pos.z:.2f}")
             else:

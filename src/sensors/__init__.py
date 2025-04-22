@@ -1,2 +1,2 @@
 from .kinect import Kinect
-from .myoband import Myoband 
+from .myo_listener import Myoband 

@@ -5,7 +5,7 @@ from collections import deque
 import numpy as np
 from src.utils import get_logger
 
-class Myoband:
+class MyoUdp:
     """
     Python version of the MyoUdp class from MATLAB.
 
@@ -36,7 +36,7 @@ class Myoband:
         myo.close()
     """
     def __init__(self, cfg):
-        self._logger = get_logger("Myoband")
+        self._logger = get_logger("MyoUdp")
         if cfg.verbose:
             self._logger.setLevel(logging.DEBUG)
         else:
@@ -78,10 +78,10 @@ class Myoband:
         Initialize two UDP sockets for channels 1-8 and 9-16.
         """
         if self._is_initialized:
-            self._logger.debug("Already initialized.")
+            self._logger.debug("Already initialized")
             return
         if not self._enable:
-            self._logger.debug("Not enabled.")
+            self._logger.debug("Not enabled")
             return
 
         # Create socket for channels 1-8
@@ -97,7 +97,7 @@ class Myoband:
 
         self._is_initialized = True
 
-        self._logger.info(f"Listening on ports {self._port1} and {self._port2}.")
+        self._logger.info(f"Listening on ports {self._port1} and {self._port2}")
 
     def disconnect(self):
         """
@@ -112,7 +112,7 @@ class Myoband:
             self._sock_16.close()
             self._sock_16 = None
         self._is_initialized = False
-        self._logger.info("Closed all sockets.")
+        self._logger.info("Closed all sockets")
 
 
     def loop(self):
@@ -174,7 +174,7 @@ class Myoband:
                 self._num_packets_received += 1
 
             else:
-                self._logger.warning(f"Unknown packet size {pkt_len} on port {self._sock_8}.")
+                self._logger.warning(f"Unknown packet size {pkt_len} on port {self._sock_8}")
 
         # 2) Read from the second socket (channels 9-16)
         packets_16 = self._read_all_data(self._sock_16)
@@ -197,7 +197,7 @@ class Myoband:
                 self._num_packets_received += 1
 
             else:
-                self._logger.warning(f"Unknown packet size {pkt_len} on port {self._sock_16}.")
+                self._logger.warning(f"Unknown packet size {pkt_len} on port {self._sock_16}")
 
         if len(self._data_buffer) >= 50: # Check if there's enough data in the buffer for `num_samples`.
             self.data_block = self._get_data(50)

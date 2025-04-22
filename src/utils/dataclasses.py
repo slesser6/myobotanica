@@ -21,6 +21,13 @@ class RobotArmConfig:
 
 @dataclass
 class MyobandConfig:
+    host: str
+    port: int
+    verbose: bool
+    enable: bool
+
+@dataclass
+class MyoUdpConfig:
     ip: str
     port1: int
     port2: int
@@ -35,8 +42,14 @@ class KinectConfig:
     enable: bool
 
 @dataclass
+class OrchestratorConfig:
+    verbose: bool
+    polling_period: int
+
+@dataclass
 class Configs:
     drone: DroneConfig
     robot_arm: RobotArmConfig
     myoband: MyobandConfig
     kinect: KinectConfig
+    orchestrator: OrchestratorConfig
