@@ -27,7 +27,7 @@ class Myoband:
             self._sock.bind((self._host, self._port))
             self._sock.listen()
         else:
-            self._logger.warn("socket already connected")
+            self._logger.warning("socket already connected")
 
         self._logger.info(f"Listening on {self._host}:{self._port}")
 
@@ -36,8 +36,13 @@ class Myoband:
         if not self._enable:
             return
         
-        conn, addr = self._sock.accept()
-        data = conn.recv(1024)
+        conn, _ = self._sock.accept()
+        conn.settimeout(1)
+        try:
+            data = conn.recv(1024)
+        except socket.timeout:
+            self._logger.warning("Timeout while waiting for data")
+            data = None  # or handle as appropriate
         if not data:
             return
         value = (data.decode())
