@@ -31,7 +31,10 @@ class Orchestrator:
     
     def get_status(self):
         print(f""+self.drone.sendCommand("FC:GETSTATE\n", 3, True, "END_RESPONSE"))
+
         # TODO: get status from myoband?
+
+
         # TODO: get status from kinect
 
     def run_calculations(self, desired_pos):

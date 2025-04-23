@@ -1,6 +1,8 @@
 import time
 import socket
 import logging
+from spatialmath import *
+import numpy as np
 from src.utils import get_logger
 from src.classifier import Classification
 
@@ -42,23 +44,34 @@ class Myoband:
             return
         value = (data.decode())
         self._logger.debug(f"Classification: {value}")
-        if (value == "Wrist Rotate In"):
-            self.classification = Classification.WRIST_ROT_IN
-        elif (value == "Wrist Rotate Out"):
-            self.classification = Classification.WRIST_ROT_OUT
-        elif (value == "Elbow Flexion"):
-            self.classification = Classification.ELBOX_FLEX
-        elif (value == "Elbow Extension"):
-            self.classification = Classification.ELBOW_EXT
-        elif (value == "Wrist Flex In"):
-            self.classification = Classification.WRIST_FLEX
+        if (value == "Wrist Flex In"):
+            self.classification = Classification.WRIST_FLEX_TURN_LEFT
         elif (value == "Wrist Extend Out"):
-            self.classification = Classification.WRIST_EXT
+            self.classification = Classification.WRIST_EXT_TURN_RIGHT
+        elif (value == "Wrist Adduction"):
+            self.classification = Classification.WRIST_ADD_ARM_DOWN
+        elif (value == "Wrist Abduction"):
+            self.classification = Classification.WRIST_ABD_ARM_UP
         elif (value == "Power Grasp"):
-            self.classification = Classification.GRASP
+            self.classification = Classification.GRASP_SPRAY
         else:
             self.classification = Classification.UNKNOWN
-                
+
+    def get_pose_modifier(self):
+        if(self.classification == Classification.WRIST_FLEX_TURN_LEFT):
+            return SE3.Rz(np.pi/16)
+        elif(self.classification == Classification.WRIST_EXT_TURN_RIGHT):
+            return SE3.Rz(-np.pi/16)
+        elif(self.classification == Classification.WRIST_ADD_ARM_DOWN):
+            return SE3(0, 0, -.5)
+        elif(self.classification == Classification.WRIST_ABD_ARM_UP):
+            return SE3(0, 0, .5)
+        else:
+            return 0
+        
+    def get_spray(self):
+        return (self.classification == Classification.GRASP_SPRAY)
+        
     def disconnect(self):
         if not self._enable:
             return

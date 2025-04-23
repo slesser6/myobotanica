@@ -1,11 +1,9 @@
 from enum import Enum
 
 class Classification(Enum):
-    WRIST_ROT_IN = 1
-    WRIST_ROT_OUT = 2
-    ELBOW_FLEX = 3
-    ELBOW_EXT = 4
-    WRIST_FLEX = 5
-    WRIST_EXT = 6
-    GRASP = 7
-    UNKNOWN = 8
+    WRIST_FLEX_TURN_LEFT = 1
+    WRIST_EXT_TURN_RIGHT = 2
+    WRIST_ADD_ARM_DOWN = 3
+    WRIST_ABD_ARM_UP = 4
+    GRASP_SPRAY = 5
+    UNKNOWN = 6
