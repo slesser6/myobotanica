@@ -1,5 +1,6 @@
 from src.orchestrator import Orchestrator
 from src.classifier import Classification
+
 import time
 
 def main():
@@ -9,29 +10,24 @@ def main():
     takeoff = False
 
     try:
+
         while(1):
             classification, position = o.loop()
+            joint_positions = o.run_calculations()
 
             cmds = []
-
-            if classification == Classification.WRIST_ROT_IN:
+            if classification == Classification.WRIST_FLEX_TURN_LEFT:
                 cmds.append((f"FC:YAW:LEFT\n", 5, True, "END_RESPONSE"))
-            elif classification == Classification.WRIST_ROT_OUT:
+            elif classification == Classification.WRIST_EXT_TURN_RIGHT:
                 cmds.append((f"FC:YAW:RIGHT\n", 5, True, "END_RESPONSE"))
-            elif classification == Classification.WRIST_FLEX:
-                cmds.append((f"FC:PITCH:DOWN\n", 5, True, "END_RESPONSE"))
-            elif classification == Classification.WRIST_EXT:
-                cmds.append((f"FC:PITCH:UP:RIGHT\n", 5, True, "END_RESPONSE"))
-            elif classification == Classification.ELBOW_FLEX:
-                joint_positions = o.run_calculations(0)
+            elif classification == Classification.WRIST_ADD_ARM_DOWN:
                 cmds.append((f"AR:SERVO:0:{joint_positions[0]}\n", 3, True, "END_RESPONSE"))
                 cmds.append((f"AR:SERVO:1:{joint_positions[1]}\n", 3, True, "END_RESPONSE"))
-            elif classification == Classification.ELBOW_EXT:
-                joint_positions = o.run_calculations(0)
+            elif classification == Classification.WRIST_ABD_ARM_UP:
                 cmds.append((f"AR:SERVO:0:{joint_positions[0]}\n", 3, True, "END_RESPONSE"))
                 cmds.append((f"AR:SERVO:1:{joint_positions[1]}\n", 3, True, "END_RESPONSE"))
 
-            if classification == Classification.GRASP:
+            if classification == Classification.GRASP_SPRAY:
                 cmds.append((f"AR:PUMP:ON\n", 3, True, "END_RESPONSE"))
             else:
                 cmds.append((f"AR:PUMP:OFF\n", 3, True, "END_RESPONSE"))
@@ -50,6 +46,7 @@ def main():
                     cmds.append(("FC:LAND\n", 10, True, "END_RESPONSE"))
                     takeoff = False
 
+            o.send_output(cmds)
             time.sleep(o.polling_period)
     except KeyboardInterrupt:
         print("Interrupt Caught. Exiting.")

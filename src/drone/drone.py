@@ -34,7 +34,7 @@ class Drone:
             time.sleep(1)
             i += 1
         if self.sendCommand("FC:GETSTATE\n", 3, True, "END_RESPONSE").is_armable:
-            self._logger.debug(self.sendCommand(self.drone.sendCommand("FC:ARM\n", 10, True, "END_RESPONSE")))
+            self._logger.debug(self.sendCommand("FC:ARM\n", 10, True, "END_RESPONSE"))
         else:
             self._logger.warning("Drone is not armable")
 
@@ -104,11 +104,16 @@ class Drone:
         if not self._enable:
             return
         
+        fails = []
         for cmd, wait_sec, end_kw in cmds:
-            self.sendCommand(cmd, wait_time=wait_sec, expect_multi=True, end_keyword=end_kw)
+            resp = self.sendCommand(cmd, wait_time=wait_sec, expect_multi=True, end_keyword=end_kw)
+            if resp is None:
+                fails.append(cmd) 
+            else:
+                self._logger.debug(resp)
             time.sleep(2)
+        return fails
 
-    
     def disconnect(self):
         if not self._enable:
             return

@@ -1,13 +1,17 @@
 from src.utils import load_config
 from src.drone import Drone
+from src.drone import Arm
 from src.sensors import Myoband
 from src.sensors import Kinect
-# TODO: from src.kinematics import solve_ik
+from src.classifier import Classification
+from spatialmath import *
+import numpy as np
 
 class Orchestrator:
     def __init__(self):
         configs = load_config()
         self.drone = Drone(configs.drone)
+        self.arm = Arm(configs.arm)
         self.myoband = Myoband(configs.myoband)
         self.kinect = Kinect(configs.kinect)
         self.verbose = configs.orchestrator.verbose
@@ -34,9 +38,21 @@ class Orchestrator:
         # TODO: get status from myoband?
         # TODO: get status from kinect
 
-    def run_calculations(self, desired_pos):
-        # TODO: return solve_ik(desired_pos)
-        return 0
+    def run_calculations(self):
+        self.prev_pos = self.arm.current_pose
+        if(self.myoband.classification == Classification.WRIST_FLEX_TURN_LEFT):
+            self.arm.current_pose = SE3.Rz(np.pi/16)*self.arm.current_pose
+        elif(self.myoband.classification == Classification.WRIST_EXT_TURN_RIGHT):
+            self.arm.current_pose = SE3.Rz(-np.pi/16)*self.arm.current_pose
+        elif(self.myoband.classification == Classification.WRIST_ADD_ARM_DOWN):
+            self.arm.current_pose = SE3(0, 0, -.5)*self.arm.current_pose
+        elif(self.myoband.classification == Classification.WRIST_ABD_ARM_UP):
+            self.arm.current_pose = SE3(0, 0, .5)*self.arm.current_pose
+        return self.arm.get_ikine()
 
     def send_output(self, cmds):
-        self.drone.runScriptMode(cmds)
+        fails = self.drone.runScriptMode(cmds)
+        for fail in fails:
+            if fail.startswith("FC:YAW:") or fail.startswith("AR:SERVO"):
+                self.arm.update_pose(self.prev_pos)
+                break

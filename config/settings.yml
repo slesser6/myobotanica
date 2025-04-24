@@ -4,13 +4,11 @@ drone:
   takeoff_alt: 2
   verbose: true
   debug_mode: true
-  enable: false
+  enable: true
 
-robot_arm:
-  base_height: 0.05
-  link_lengths: [0.2, 0.2]
+arm:
   verbose: true
-  enable: false
+  enable: true
 
 myoudp:
   ip: "192.168.1.10"
@@ -19,7 +17,7 @@ myoudp:
   sample_freq: 1000.0
   input_freq: 200.0
   verbose: true
-  enable: false
+  enable: true
 
 myoband:
   host: "localhost"

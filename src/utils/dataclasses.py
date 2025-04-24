@@ -13,9 +13,7 @@ class DroneConfig:
     enable: bool
 
 @dataclass
-class RobotArmConfig:
-    base_height: float
-    link_lengths: List[float]
+class ArmConfig:
     verbose: bool
     enable: bool
 
@@ -49,7 +47,7 @@ class OrchestratorConfig:
 @dataclass
 class Configs:
     drone: DroneConfig
-    robot_arm: RobotArmConfig
+    arm: ArmConfig
     myoband: MyobandConfig
     kinect: KinectConfig
     orchestrator: OrchestratorConfig
