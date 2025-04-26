@@ -102,7 +102,7 @@ class Drone:
         Each command on the RPi side should append an end-of-response marker.
         """
         if not self._enable:
-            return
+            return []
         
         fails = []
         for cmd, wait_sec, end_kw in cmds:

@@ -44,4 +44,4 @@ class Arm(rtb.DHRobot):
         self.current_pose = Arm.fkine(self, self._qn)
 
     def get_ikine(self):
-        return Arm.ikine_LM(self.current_pose, mask = [1, 1, 1, 0, 0, 0], slimit = 100, joint_limits=True)
+        return Arm.ikine_LM(self, self.current_pose, mask = [1, 1, 1, 0, 0, 0], slimit = 100, joint_limits=True)
