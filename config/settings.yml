@@ -1,9 +1,9 @@
 drone:
-  port: "COM10"
+  port: "COM5"
   baud_rate: 57600
   takeoff_alt: 2
   verbose: true
-  debug_mode: true
+  debug_mode: false
   enable: true
 
 arm:
@@ -17,18 +17,18 @@ myoudp:
   sample_freq: 1000.0
   input_freq: 200.0
   verbose: true
-  enable: true
+  enable: false
 
 myoband:
   host: "localhost"
   port: 65432
   verbose: true
   enable: true
-
+  
 kinect:
   verbose: true
   enable: true
 
 orchestrator:
   verbose: true
-  polling_period: 1
+  polling_period: 2

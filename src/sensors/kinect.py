@@ -93,7 +93,7 @@ class Kinect:
             if self.right_pos is not None:
                 self._logger.debug(f"Right Hand: \033[91mx={self.right_pos.x:.2f}, y={self.right_pos.y:.2f},\033[94m z={self.right_pos.z:.2f}")
             else:
-                self._logger.debug("Right hand not found")
+                self._logger.warning("Right hand not found")
         
     def disconnect(self):
         if self._enable and self._kinect is not None:
