@@ -1,10 +1,10 @@
 drone:
-  port: "COM5"
+  port: "COM4"
   baud_rate: 57600
   takeoff_alt: 2
   verbose: true
   debug_mode: false
-  enable: false
+  enable: true
 
 arm:
   verbose: true
@@ -27,7 +27,7 @@ myoband:
   
 kinect:
   verbose: true
-  enable: false
+  enable: true
 
 orchestrator:
   verbose: true

@@ -45,14 +45,16 @@ class Orchestrator:
         elif(self.myoband.classification == Classification.WRIST_EXT_TURN_RIGHT):
             self.arm.current_pose = SE3.Rz(-np.pi/12)*self.arm.current_pose
         elif(self.myoband.classification == Classification.WRIST_ADD_ARM_DOWN):
-            self.arm.current_pose = SE3(0, 0, -.25)*self.arm.current_pose
+            self.arm.current_pose = SE3(0, 0, -.5)*self.arm.current_pose
         elif(self.myoband.classification == Classification.WRIST_ABD_ARM_UP):
-            self.arm.current_pose = SE3(0, 0, .25)*self.arm.current_pose
+            self.arm.current_pose = SE3(0, 0, .5)*self.arm.current_pose
+        
+        # print(self.arm.current_pose)
         return self.arm.get_ikine()
 
     def send_output(self, cmds):
         fails = self.drone.runScriptMode(cmds)
         for fail in fails:
             if fail.startswith("FC:YAW:") or fail.startswith("AR:SERVO"):
-                self.arm.update_pose(self.prev_pos)
+                self.arm.current_pose = self.prev_pos
                 break
