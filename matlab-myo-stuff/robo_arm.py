@@ -7,16 +7,17 @@ import socket
 
 l = [
     rtb.RevoluteDH(
-        d = -2,
+        d = -0.783,
         alpha = np.pi/2,
-        qlim = [0, np.pi/2]
+        a = 6.5,
+        # qlim = [-np.pi, np.pi]
     ),
     rtb.RevoluteDH(
-        a = 3,
+        a = 1.833,
         qlim = [-np.pi/2, 0]
     ),
     rtb.RevoluteDH(
-        a = 3,
+        a = 1.81,
     )
 ]
 
@@ -29,7 +30,7 @@ print(pos)
 new_pos =  SE3(0, 0, 3.5) * pos
 new_pos.t[2] = min(-.1, new_pos.t[2])
 print(new_pos)
-# new_pos = SE3.Rz(np.pi/2) * new_pos
+new_pos = SE3.Rz(np.pi/2) * new_pos
 print(new_pos)
 results = bot.ikine_LM(Tep = new_pos, mask = [1, 1, 1, 0, 0, 0], slimit=100, joint_limits = True)
 print(results)
