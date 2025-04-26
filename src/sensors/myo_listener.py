@@ -23,25 +23,36 @@ class Myoband:
 
         if self._sock is None:
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._sock.bind((self._host, self._port))
-            self._sock.listen()
+            self._sock.settimeout(5)
+            try:
+                self._sock.connect((self._host, self._port))
+                self._logger.info(f"Listening on {self._host}:{self._port}")
+            except:
+                self._logger.warning("could not connect to socket.")
+                self._sock = None
         else:
-            self._logger.warning("socket already connected")
-
-        self._logger.info(f"Listening on {self._host}:{self._port}")
-
+            self._logger.warning("socket already connected.")
 
     def loop(self):
         if not self._enable:
             return
         
-        self._sock.settimeout(1)
+        if self._sock is None:
+            try:
+                self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self._sock.settimeout(5)
+                self._sock.connect((self._host, self._port))
+                self._logger.info(f"Listening on {self._host}:{self._port}")
+            except:
+                self._logger.warning("Could not connect to socket")
+                self._sock = None
+                return
+                
         try:
-            conn, _ = self._sock.accept()
-            data = conn.recv(1024)
+            data = self._sock.recv(1024)
         except:
             self._logger.warning("No data received within timeout")
-            data = None
+            return
 
         if not data:
             return
