@@ -35,13 +35,14 @@ class Myoband:
         if not self._enable:
             return
         
-        conn, _ = self._sock.accept()
-        conn.settimeout(1)
+        self._sock.settimeout(1)
         try:
+            conn, _ = self._sock.accept()
             data = conn.recv(1024)
-        except socket.timeout:
-            self._logger.warning("Timeout while waiting for data")
-            data = None  # or handle as appropriate
+        except:
+            self._logger.warning("No data received within timeout")
+            data = None
+
         if not data:
             return
         value = (data.decode())

@@ -29,16 +29,27 @@ class Drone:
             self._logger.error(f"Error opening serial port {self._port}: {e}")
             return
         
-        i = 0
-        while not self.sendCommand("FC:GETSTATE\n", 3, True, "END_RESPONSE").is_armable and i < 10:
-            time.sleep(1)
-            i += 1
-        if self.sendCommand("FC:GETSTATE\n", 3, True, "END_RESPONSE").is_armable:
+        if self.isArmable():
             self._logger.debug(self.sendCommand("FC:ARM\n", 10, True, "END_RESPONSE"))
         else:
             self._logger.warning("Drone is not armable")
 
-    def sendCommand(self, cmd, wait_time=2, expect_multi=False, end_keyword=None):
+    def isArmable(self):
+        for line in self.sendCommand("FC:GETSTATE\n", 3, True, "END_RESPONSE", overwrite_mode=True):
+            if "is_armable" in line:
+                if "true" in line:
+                    return True
+        return False
+
+    def sendCommandAsync(self, cmd, wait_time=2, expect_multi=False, end_keyword=None, overwrite_mode=False):
+        thread = threading.Thread(
+            target=self.sendCommand, 
+            args=(cmd, wait_time, expect_multi, end_keyword, overwrite_mode)
+        )
+        thread.start()
+        return
+
+    def sendCommand(self, cmd, wait_time=2, expect_multi=False, end_keyword=None, overwrite_mode=False):
         """
         Sends a command to the RPi and prints all responses until either wait_time expires
         or an end_keyword is detected.
@@ -61,7 +72,7 @@ class Drone:
         
         # Flush any stale data before sending
         self._serial_conn.reset_input_buffer()
-        if self._debug_mode:
+        if self._debug_mode and not overwrite_mode:
             while True:
                 answer = input(f"\nWould you like to send this command: {cmd.strip()}? y/n: ").strip().lower()
                 if answer == 'y':
@@ -72,7 +83,7 @@ class Drone:
                 else:
                     self._logger.info("Invalid input. Please enter 'y' or 'n'")
 
-        self._logger.debug(f"Sending command to RPi: {cmd.strip()}")
+        self._logger.debug(f"Sending command to RPi: \033[91m{cmd.strip()}\033[94m")
         self._serial_conn.write(cmd.encode())
 
         responses = []

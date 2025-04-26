@@ -38,12 +38,12 @@ class Kinect:
 
     def connect(self):
         if self._enable:
-            pygame.init()
-            self._clock = pygame.time.Clock()
-            self._infoObject = pygame.display.Info()
-            self._screen = pygame.display.set_mode((self._infoObject.current_w >> 1, self._infoObject.current_h >> 1), 
-                                                pygame.HWSURFACE|pygame.DOUBLEBUF|pygame.RESIZABLE, 32)
-            pygame.display.set_caption("Kinect for Windows v2")
+            # pygame.init()
+            # self._clock = pygame.time.Clock()
+            # self._infoObject = pygame.display.Info()
+            # self._screen = pygame.display.set_mode((self._infoObject.current_w >> 1, self._infoObject.current_h >> 1), 
+            #                                     pygame.HWSURFACE|pygame.DOUBLEBUF|pygame.RESIZABLE, 32)
+            # pygame.display.set_caption("Kinect for Windows v2")
             self._kinect = PyKinectRuntime.PyKinectRuntime(PyKinectV2.FrameSourceTypes_Color | PyKinectV2.FrameSourceTypes_Body)
             self._frame_surface = pygame.Surface((self._kinect.color_frame_desc.Width, self._kinect.color_frame_desc.Height), 0, 32)
             self._logger.info("Connected")
@@ -77,21 +77,21 @@ class Kinect:
 
                     break
 
-            h_to_w = float(self._frame_surface.get_height()) / self._frame_surface.get_width()
-            target_height = int(h_to_w * self._screen.get_width())
-            surface_to_draw = pygame.transform.scale(self._frame_surface, (self._screen.get_width(), target_height))
-            self._screen.blit(surface_to_draw, (0,0))
-            surface_to_draw = None
-            pygame.display.update()
-            pygame.display.flip()
-            self._clock.tick(60)
+            # h_to_w = float(self._frame_surface.get_height()) / self._frame_surface.get_width()
+            # target_height = int(h_to_w * self._screen.get_width())
+            # surface_to_draw = pygame.transform.scale(self._frame_surface, (self._screen.get_width(), target_height))
+            # self._screen.blit(surface_to_draw, (0,0))
+            # surface_to_draw = None
+            # pygame.display.update()
+            # pygame.display.flip()
+            # self._clock.tick(60)
 
-            if self.left_pos is not None:
-                self._logger.debug(f"Left Hand: x={self.left_pos.x:.2f}, y={self.left_pos.y:.2f}, z={self.left_pos.z:.2f}")
-            else:
-                self._logger.debug(f"Left hand not found")
+            # if self.left_pos is not None:
+            #     self._logger.debug(f"Left Hand: x={self.left_pos.x:.2f}, y={self.left_pos.y:.2f}, z={self.left_pos.z:.2f}")
+            # else:
+            #     self._logger.debug(f"Left hand not found")
             if self.right_pos is not None:
-                self._logger.debug(f"Right Hand: x={self.right_pos.x:.2f}, y={self.right_pos.y:.2f}, z={self.right_pos.z:.2f}")
+                self._logger.debug(f"Right Hand: \033[91mx={self.right_pos.x:.2f}, y={self.right_pos.y:.2f},\033[94m z={self.right_pos.z:.2f}")
             else:
                 self._logger.debug("Right hand not found")
         
