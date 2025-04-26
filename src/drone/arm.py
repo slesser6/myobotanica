@@ -40,8 +40,15 @@ class Arm(rtb.DHRobot):
 
         self.addconfiguration("qn", self._qn)
         self.addconfiguration("qz", self._qz)
-
+        self._previous_q = self._qn
         self.current_pose = Arm.fkine(self, self._qn)
 
     def get_ikine(self):
-        return Arm.ikine_LM(self, self.current_pose, mask = [1, 1, 1, 0, 0, 0], slimit = 100, joint_limits=True)
+        results = Arm.ikine_LM(self, Tep=self.current_pose, mask = [1, 1, 1, 0, 0, 0], slimit=100, joint_limits = True)
+        if (results.success):
+            self._previous_q = results.q
+            self._logger.debug(f"Servo positions: {results.q}")
+            return results.q
+        else:
+            self._logger.warning("Unable to calculate inverse kinematics.")
+            return self._previous_q

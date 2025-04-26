@@ -23,11 +23,11 @@ def main():
             elif classification == Classification.WRIST_EXT_TURN_RIGHT:
                 cmds.append((f"FC:YAW:RIGHT\n", 5, "END_RESPONSE"))
             elif classification == Classification.WRIST_ADD_ARM_DOWN:
-                cmds.append((f"AR:SERVO:0:{joint_positions[0]}\n", 3, "END_RESPONSE"))
-                cmds.append((f"AR:SERVO:1:{joint_positions[1]}\n", 3, "END_RESPONSE"))
+                cmds.append((f"AR:SERVO:0:{joint_positions[1]}\n", 3, "END_RESPONSE"))
+                cmds.append((f"AR:SERVO:1:{joint_positions[2]}\n", 3, "END_RESPONSE"))
             elif classification == Classification.WRIST_ABD_ARM_UP:
-                cmds.append((f"AR:SERVO:0:{joint_positions[0]}\n", 3, "END_RESPONSE"))
-                cmds.append((f"AR:SERVO:1:{joint_positions[1]}\n", 3, "END_RESPONSE"))
+                cmds.append((f"AR:SERVO:0:{joint_positions[1]}\n", 3, "END_RESPONSE"))
+                cmds.append((f"AR:SERVO:1:{joint_positions[2]}\n", 3, "END_RESPONSE"))
 
             if classification == Classification.GRASP_SPRAY:
                 cmds.append((f"AR:PUMP:ON\n", 3, "END_RESPONSE"))
