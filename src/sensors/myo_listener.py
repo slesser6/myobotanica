@@ -14,6 +14,7 @@ class Myoband:
         self._port = cfg.port
         self._enable = cfg.enable
         self._sock = None
+        self._conn = None
         self.classification = Classification.UNKNOWN
 
     def connect(self):
@@ -21,15 +22,17 @@ class Myoband:
             self._logger.debug("Not enabled")
             return
 
-        if self._sock is None:
+        if self._conn is None:
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._sock.settimeout(5)
+            self._sock.settimeout(1)
+            
             try:
-                self._sock.connect((self._host, self._port))
+                self._sock.bind((self._host, self._port))
+                self._sock.listen(1)
+                self._conn = self._sock.accept()
                 self._logger.info(f"Listening on {self._host}:{self._port}")
             except:
                 self._logger.warning("could not connect to socket.")
-                self._sock = None
         else:
             self._logger.warning("socket already connected.")
 
@@ -37,19 +40,17 @@ class Myoband:
         if not self._enable:
             return
         
-        if self._sock is None:
+        if self._sock is None or self._conn is None:            
             try:
-                self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self._sock.settimeout(5)
-                self._sock.connect((self._host, self._port))
+                self._sock.listen(1)
+                self._conn = self._sock.accept()
                 self._logger.info(f"Listening on {self._host}:{self._port}")
             except:
                 self._logger.warning("Could not connect to socket")
-                self._sock = None
                 return
                 
         try:
-            data = self._sock.recv(1024)
+            data = self._conn.recv(1024)
         except:
             self._logger.warning("No data received within timeout")
             return
@@ -75,6 +76,7 @@ class Myoband:
         if not self._enable:
             return
         if self._sock is not None:
+            self._conn.close()
             self._sock.close()
             self._sock = None
         
