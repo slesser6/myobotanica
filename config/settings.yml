@@ -3,11 +3,7 @@ drone:
   baud_rate: 57600
   takeoff_alt: 2
   verbose: true
-<<<<<<< Updated upstream
   debug_mode: false
-=======
-  debug_mode: true
->>>>>>> Stashed changes
   enable: false
 
 arm:
