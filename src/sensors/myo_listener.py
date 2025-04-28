@@ -25,11 +25,12 @@ class Myoband:
         if self._conn is None:
             self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self._sock.settimeout(1)
+            self._sock.setblocking(False)
             
             try:
                 self._sock.bind((self._host, self._port))
                 self._sock.listen(1)
-                self._conn = self._sock.accept()
+                self._conn, _ = self._sock.accept()
                 self._logger.info(f"Listening on {self._host}:{self._port}")
             except:
                 self._logger.warning("could not connect to socket.")
@@ -42,8 +43,8 @@ class Myoband:
         
         if self._sock is None or self._conn is None:            
             try:
-                self._sock.listen(1)
-                self._conn = self._sock.accept()
+                self._sock.listen()
+                self._conn, _ = self._sock.accept()
                 self._logger.info(f"Listening on {self._host}:{self._port}")
             except:
                 self._logger.warning("Could not connect to socket")
@@ -51,8 +52,8 @@ class Myoband:
                 
         try:
             data = self._conn.recv(1024)
-        except:
-            self._logger.warning("No data received within timeout")
+        except Exception as e:
+            self._logger.warning("No data received within timeout", e)
             return
 
         if not data:

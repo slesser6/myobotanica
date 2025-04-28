@@ -2,8 +2,6 @@ import roboticstoolbox as rtb
 from spatialmath import *
 import numpy as np
 import matplotlib.pyplot as plt
-import matlab.engine
-import time
 import socket
 
 

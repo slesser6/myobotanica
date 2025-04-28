@@ -4,7 +4,7 @@ drone:
   takeoff_alt: 2
   verbose: true
   debug_mode: false
-  enable: true
+  enable: false
 
 arm:
   verbose: true
@@ -27,7 +27,7 @@ myoband:
   
 kinect:
   verbose: true
-  enable: true
+  enable: false
 
 orchestrator:
   verbose: true
