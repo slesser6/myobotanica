@@ -1,25 +1,36 @@
-import serial, time, logging
+# flightComputer/io/serial_link.py
+import serial, time, logging, threading
 
 class SerialLink:
     def __init__(self, port: str, baud: int, timeout: float = 1):
         self.log = logging.getLogger(self.__class__.__name__)
+        self._lock = threading.Lock()               # ← add this
         try:
             self.ser = serial.Serial(port, baud, timeout=timeout)
             self.log.info("Opened %s @ %d", port, baud)
-            time.sleep(2)           # Arduino reset or FTDI settle
+            time.sleep(2)  # Arduino reset or FTDI settle
         except Exception as e:
             self.log.error("Could not open %s: %s", port, e)
             self.ser = None
 
-    # helpers
     def write_line(self, text: str):
-        if self.ser:
-            self.ser.write((text + "\n").encode())
+        if not self.ser:
+            return
+        data = (text + "\n").encode()
+        with self._lock:
+            self.ser.write(data)
+            self.ser.flush()
 
     def read_line(self) -> str:
-        if self.ser and self.ser.in_waiting:
-            return self.ser.readline().decode(errors="ignore").strip()
-        return ""
+        """
+        Always block until we see a newline, then return the
+        decoded, stripped line.  This guarantees we only ever
+        return *complete* \n‑terminated strings.
+        """
+        if not self.ser:
+            return ""
+        raw = self.ser.readline()     # blocks until “\n”
+        return raw.decode(errors="ignore").strip()
     
     def flush(self):
         if self.ser:

@@ -15,15 +15,19 @@ class Dispatcher(threading.Thread):
         self.radio.start()
 
     def run(self):
+        self.log.info("Dispatcher started")
         while True:
             try:
-                cmd = BUS.get(timeout=0.5)        # ❶ unblockable loop
-                # ignore telemetry JSON blobs (they start with "{")
-                if cmd.lstrip().startswith("{"):
-                    continue
+                # cmd = BUS.get(timeout=0.5)    # grab the next line pushed by RadioReceiver
+                cmd = BUS.get(timeout=2)
             except queue.Empty:
-                continue                          # nothing to do, loop
-            if cmd == "__QUIT__":                 # ❷ graceful stop token
+                continue
+
+            # ignore telemetry JSON blobs
+            if cmd.lstrip().startswith("{"):
+                continue
+
+            if cmd == "__QUIT__":
                 self.log.info("Stopping dispatcher.")
                 break
 
@@ -33,13 +37,13 @@ class Dispatcher(threading.Thread):
                 try:
                     resp = func(payload)
                     if resp:
-                        self.radio.send(resp) # Send command response
-                                        
+                        self.radio.send(resp)
+                        # once the one-off reply is sent, resume telemetry
                         from flightComputer.fc import FC
-                        FC._telem_suspended.clear() # Resume telemetry
-                        
-                except Exception as e:           # ❸ protect handler errors
+                        FC._telem_suspended.clear()
+                except Exception as e:
                     self.log.error("Handler %s blew up: %s", prefix, e)
             else:
                 self.log.warning("Unknown prefix %s", prefix)
-            time.sleep(0.01)                     # tiny yield to avoid 100 % CPU
+
+            time.sleep(10)

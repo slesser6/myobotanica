@@ -58,19 +58,41 @@ class ArduinoController(SerialLink):
             if axis not in _AXES:
                 return f"Unknown servo axis '{axis}'."
             payload = f"{_CMD_SERVO}:{axis}:{angle}"
+            self.log.debug(f"SERVO Sending Command: {payload}")
             self.write_line(payload)
             self.flush()
             resp = self._wait_response(3)
             return resp or f"Sent servo {axis} -> {angle}; no ACK."
 
         # ---------- PUMP ----------------------------------------------
-        if cmd == _CMD_PUMP and len(parts) >= 2:
-            state = parts[1].upper()
-            if state not in {"ON", "OFF"}:
-                return "Pump state must be ON or OFF."
-            self.write_line(f"{_CMD_PUMP}:{state}")
+        # if cmd == _CMD_PUMP and len(parts) >= 2:
+        #     state = parts[1].upper()
+        #     if state not in {"ON", "OFF"}:
+        #         return "Pump state must be ON or OFF."
+        #     self.write_line(f"{_CMD_PUMP}:{state}")
+        #     self.flush()
+        #     resp = self._wait_response(3)
+        #     return resp or f"Pump {state}; no ACK."
+        
+        def set_offset(self, axis: str, degrees: int) -> str:
+            """OFFSET:PITCH:-10 → shifts zero by -10°"""
+            axis = axis.upper()
+            if axis not in _AXES:
+                return f"Unknown servo axis '{axis}'."
+            self.write_line(f"{_CMD_OFFSET}:{axis}:{degrees}")
             self.flush()
-            resp = self._wait_response(3)
-            return resp or f"Pump {state}; no ACK."
+            return self._wait_response()
+
+        def pump_on_ms(self, ms: int) -> str:
+            """Turn pump on for <ms> milliseconds."""
+            self.write_line(f"{_CMD_PUMP}:ON:{ms}")
+            self.flush()
+            return self._wait_response()
+
+        def get_state(self) -> str:
+            """Return 'STATE:PITCH:…:PITCH2:…:PUMP:…'."""
+            self.write_line(_CMD_STATE)
+            self.flush()
+            return self._wait_response()
 
         return f"Unknown Arduino command: {command}"
