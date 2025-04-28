@@ -8,7 +8,7 @@ def main() -> None:
     FC.connect()                        # starts MAVLink (and SITL if requested)
     
     disp = Dispatcher()                 # starts RadioReceiver inside
-    FC.start_telemetry(disp.radio)    
+    # FC.start_telemetry(disp.radio)    
     
     try:
         disp.run()                      # never returns until SIGINT/SIGTERM

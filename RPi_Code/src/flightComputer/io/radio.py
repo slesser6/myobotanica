@@ -1,10 +1,11 @@
 from .serial_link import SerialLink
 from queue import Queue
 import threading, logging
+import time
 
 class RadioReceiver(threading.Thread, SerialLink):
     def __init__(self, port, baud, bus: Queue):
-        SerialLink.__init__(self, port, baud, timeout=0.5)
+        SerialLink.__init__(self, port, baud, timeout=None)
         threading.Thread.__init__(self, daemon=True)
         self.bus = bus
         self.log = logging.getLogger("Radio")

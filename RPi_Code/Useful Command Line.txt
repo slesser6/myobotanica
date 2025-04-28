@@ -19,3 +19,5 @@ git add ./									# Add all changed files to staging
 git commit -m "Description of changes" 		# Add a description of changes 
 git push									# push changes to GitHub
 git remote set-url origin https://alex-heigl@github.com/slesser6/myobotanica.git
+
+sudo shutdown -r now

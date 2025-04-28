@@ -136,52 +136,6 @@ class FlightController:
         if self._sitl:
             self._sitl.stop()
 
-    # ---------- public command entry‑point ---------------------------
-    # def send_command(self, command: str) -> str | None:
-    #     """
-    #     Dispatch by prefix (GETSTATE, ARM, MOVE, …).
-    #     Returns a multi‑line string ending with END_RESPONSE
-    #     or None on unknown command.
-    #     """
-    #     parts = command.strip().split(":")
-    #     cmd = parts[0].upper()
-    #     rest = parts[1:]
-
-    #     cmd = cmd.upper()          # make sure we compare upper‑case
-        
-    #     # special commands to pause/resume telemetry on demand
-    #     if cmd == "STREAMOFF":
-    #         self._telem_suspended.set()
-    #         return "Stream paused.\nEND_RESPONSE"
-    #     if cmd == "STREAMON":
-    #         self._telem_suspended.clear()
-    #         return "Stream resumed.\nEND_RESPONSE"   
-        
-    #             # for anything other than GETSTATE, suspend telemetry
-    #     do_suspend = (cmd != "GETSTATE")
-    #     if do_suspend:
-    #         self._telem_suspended.set()
-
-    #     try:     
-        
-    #         # always let GETSTATE run through without suspending
-    #         if cmd != "GETSTATE":
-    #             self._telem_suspended.set()   # pause the stream        
-
-    #         if cmd == "GETSTATE":
-    #             return self.get_state()
-
-    #         elif cmd == "ARM":
-    #             return self.arm_drone()
-
-    #         elif cmd == "TAKEOFF":
-    #             target_alt = float(rest[0]) if rest else 2.0
-    #             return self.takeoff_drone(target_alt)
-
-    #         elif cmd == "MOVE":
-    #             return self.move(rest[0] if rest else "FWD")
-
-
     def send_command(self, command: str) -> Optional[str]:
         """
         Dispatch by prefix (GETSTATE, ARM, MOVE, …).
@@ -299,8 +253,11 @@ class FlightController:
         def _loop():
             while not stop.is_set():
                 if not self._telem_suspended.is_set():
-                    blob = json.dumps(self.get_state_dict()) + "\n"
-                    radio.send(blob)
+                    # blob = json.dumps(self.get_state_dict()) + "\n"
+                    # radio.send(blob)
+                    blob = "T:" + json.dumps(self.get_state_dict()) + "\n"
+                    print(f"[TX] telemetry {len(blob)} bytes")
+                    radio.send(blob)                  
                 stop.wait(period)
 
         self._tele_th   = threading.Thread(target=_loop, daemon=True)
