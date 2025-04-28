@@ -7,13 +7,9 @@ classDiagram
   }
   class drone {
   }
+  class arm {
+  }
   class drone {
-  }
-  class kinematics {
-  }
-  class forward {
-  }
-  class inverse {
   }
   class orchestrator {
   }
@@ -34,10 +30,11 @@ classDiagram
   class logger {
   }
   classifier --> classifier
+  drone --> arm
   drone --> drone
+  arm --> utils
   drone --> utils
-  kinematics --> forward
-  kinematics --> inverse
+  orchestrator --> classifier
   orchestrator --> drone
   orchestrator --> sensors
   orchestrator --> utils

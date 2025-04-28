@@ -1,4 +1,12 @@
 classDiagram
+  class Arm {
+    current_pose : SE3
+    get_ikine()
+  }
+  class ArmConfig {
+    enable : bool
+    verbose : bool
+  }
   class Classification {
     name
   }
@@ -6,18 +14,20 @@ classDiagram
     format(record)
   }
   class Configs {
+    arm
     drone
     kinect
     myoband
     orchestrator
-    robot_arm
   }
   class Drone {
     takeoff_alt
     connect()
     disconnect()
+    isArmable()
     runScriptMode(cmds)
-    sendCommand(cmd, wait_time, expect_multi, end_keyword)
+    sendCommand(cmd, wait_time, expect_multi, end_keyword, overwrite_mode)
+    sendCommandAsync(cmd, wait_time, expect_multi, end_keyword, overwrite_mode)
   }
   class DroneConfig {
     baud_rate : int
@@ -56,7 +66,7 @@ classDiagram
     verbose : bool
   }
   class Myoband {
-    classification : ELBOW_EXT, GRASP, UNKNOWN, WRIST_EXT, WRIST_FLEX, WRIST_ROT_IN, WRIST_ROT_OUT
+    classification : GRASP_SPRAY, UNKNOWN, WRIST_ABD_ARM_UP, WRIST_ADD_ARM_DOWN, WRIST_EXT_TURN_RIGHT, WRIST_FLEX_TURN_LEFT
     connect()
     disconnect()
     loop()
@@ -68,33 +78,30 @@ classDiagram
     verbose : bool
   }
   class Orchestrator {
+    arm
     drone
     kinect
     myoband
     polling_period : int
+    prev_pos
     verbose : bool
     connect()
     disconnect()
     get_status()
     loop()
-    run_calculations(desired_pos)
+    run_calculations()
     send_output(cmds)
   }
   class OrchestratorConfig {
     polling_period : int
     verbose : bool
   }
-  class RobotArmConfig {
-    base_height : float
-    enable : bool
-    link_lengths : List[float]
-    verbose : bool
-  }
+  Arm --* Orchestrator : arm
   Drone --* Orchestrator : drone
   Kinect --* Orchestrator : kinect
   Myoband --* Orchestrator : myoband
+  ArmConfig --* Configs : arm
   DroneConfig --* Configs : drone
   KinectConfig --* Configs : kinect
   MyobandConfig --* Configs : myoband
   OrchestratorConfig --* Configs : orchestrator
-  RobotArmConfig --* Configs : robot_arm
