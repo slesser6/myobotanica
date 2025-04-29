@@ -23,13 +23,15 @@ class Arm(rtb.DHRobot):
             ),
             rtb.RevoluteDH(
                 a = 1.833,
-                qlim = [-np.pi/2, np.pi/2]
+                qlim = [-np.pi/2 - .2, 0]
             ),
             rtb.RevoluteDH(
                 a = 1.81,
-                qlim = [-np.pi/2, np.pi/2]
+                qlim = [-(np.pi),0],
+                offset = np.pi/2
             )
         ]
+
 
         super().__init__(
             L,
@@ -37,7 +39,7 @@ class Arm(rtb.DHRobot):
             manufacturer="Myobotanica"
         )
 
-        self._qn = np.array([0, -np.pi/4, np.pi/4]) #nominal/starting pose
+        self._qn = np.array([0, 0, -np.pi/2]) #nominal/starting pose
         self._qz = np.array([0, 0, 0])
 
         self.addconfiguration("qn", self._qn)
@@ -46,7 +48,7 @@ class Arm(rtb.DHRobot):
         self.current_pose = Arm.fkine(self, self._qn)
 
     def get_ikine(self):
-        results = Arm.ikine_LM(self, Tep=self.current_pose, mask = [1, 1, 1, 0, 0, 0], slimit=100, joint_limits = True)
+        results = Arm.ikine_LM(self, Tep=self.current_pose, mask = [0, 0, 0, 1, 1, 1], slimit=100, joint_limits = True, tol = .1)
         if (results.success):
             self._previous_q = results.q
             self._logger.debug(f"Servo positions: {results.q}")

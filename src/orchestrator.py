@@ -41,13 +41,16 @@ class Orchestrator:
     def run_calculations(self):
         self.prev_pos = self.arm.current_pose
         if(self.myoband.classification == Classification.WRIST_FLEX_TURN_LEFT):
-            self.arm.current_pose = SE3.Rz(np.pi/12)*self.arm.current_pose
+            None
+            # commenting these out to prevent messing with the new angle based IKine
+            # self.arm.current_pose = SE3.Rz(np.pi/12)*self.arm.current_pose
         elif(self.myoband.classification == Classification.WRIST_EXT_TURN_RIGHT):
-            self.arm.current_pose = SE3.Rz(-np.pi/12)*self.arm.current_pose
+            None
+            # self.arm.current_pose = SE3.Rz(-np.pi/12)*self.arm.current_pose
         elif(self.myoband.classification == Classification.WRIST_ADD_ARM_DOWN):
-            self.arm.current_pose = SE3(0, 0, -.5)*self.arm.current_pose
+            self.arm.current_pose = SE3.Ry(np.pi/8)*self.arm.current_pose
         elif(self.myoband.classification == Classification.WRIST_ABD_ARM_UP):
-            self.arm.current_pose = SE3(0, 0, .5)*self.arm.current_pose
+            self.arm.current_pose = SE3.Ry(-np.pi/8)*self.arm.current_pose
         
         # print(self.arm.current_pose)
         return self.arm.get_ikine()

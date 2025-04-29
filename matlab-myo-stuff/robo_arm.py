@@ -18,7 +18,7 @@ l = [
     ),
     rtb.RevoluteDH(
         a = 1.81,
-        qlim = [-(np.pi)/2,(np.pi)/2],
+        qlim = [-(np.pi),0],
         offset = np.pi/2
     )
 ]

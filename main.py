@@ -17,8 +17,8 @@ def main():
         while(1):
             classification, position = o.loop()
             joint_positions = o.run_calculations()
-            joint_positions[1] = (joint_positions[1]*180/pi)+90
-            joint_positions[2] = (joint_positions[2]*180/pi)+90
+            joint_positions[1] = (-joint_positions[1]*180/pi)
+            joint_positions[2] = (-joint_positions[2]*180/pi)
 
             cmds = []
             if classification == Classification.WRIST_FLEX_TURN_LEFT:

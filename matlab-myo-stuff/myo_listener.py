@@ -19,7 +19,7 @@ l = [
     ),
     rtb.RevoluteDH(
         a = 1.81,
-        qlim = [-(np.pi)/2,(np.pi)/2],
+        qlim = [-(np.pi),0],
         offset = np.pi/2
     )
 ]
@@ -45,6 +45,7 @@ def start_server(host='localhost', port=65432):
         s.listen()
         print(f"Server started at {host}:{port}")
         conn, addr = s.accept()
+        s.setblocking(False)
         q = [0, 0, -np.pi/2]
         position = bot.fkine(q) #initial position
         new_position = position
@@ -55,8 +56,12 @@ def start_server(host='localhost', port=65432):
                 if not data:
                     break
                 # Process the received data
-                value = (data.decode().split(',')[-2])
-                print(value)
+                value = (data.decode())
+                
+                print('value', value)
+                split = value.split(',')
+                print(split)
+                value = split[-2]
 
                 # decode what we got and do something with it
                 found = True
@@ -82,7 +87,7 @@ def start_server(host='localhost', port=65432):
                 else:
                     found = False
                 if found:
-                    results = bot.ikine_LM(Tep = new_position, mask = [1, 1, 1, 0, 0, 0], slimit=100, joint_limits = True)
+                    results = bot.ikine_LM(Tep = new_position, mask = [0,0,0, 1,1,1], slimit=100, joint_limits = True, tol = .1)
                     print(new_position)
                     print(results)
                     if (results.success):
@@ -94,7 +99,7 @@ def start_server(host='localhost', port=65432):
                         bot.plot(traj_q.q, dt=0.1, backend = 'pyplot')
                 
                 # print(position)
-                plt.pause(.25)
+                plt.pause(1)
                 # time.sleep(4)
 
 
