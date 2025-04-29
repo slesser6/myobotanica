@@ -8,16 +8,19 @@ import socket
 
 l = [
     rtb.RevoluteDH(
-        d = -2,
+        d = -0.783,
         alpha = np.pi/2,
+        a = 6.5,
         # qlim = [-np.pi, np.pi]
     ),
     rtb.RevoluteDH(
-        a = 3,
-        qlim = [-np.pi/2, 0]
+        a = 1.833,
+        qlim = [-np.pi/2 - .2, 0]
     ),
     rtb.RevoluteDH(
-        a = 3,
+        a = 1.81,
+        qlim = [-(np.pi)/2,(np.pi)/2],
+        offset = np.pi/2
     )
 ]
 
@@ -42,7 +45,7 @@ def start_server(host='localhost', port=65432):
         s.listen()
         print(f"Server started at {host}:{port}")
         conn, addr = s.accept()
-        q = [0, -np.pi/4, np.pi/4]
+        q = [0, 0, -np.pi/2]
         position = bot.fkine(q) #initial position
         new_position = position
         with conn:
@@ -52,29 +55,28 @@ def start_server(host='localhost', port=65432):
                 if not data:
                     break
                 # Process the received data
-                value = (data.decode())
+                value = (data.decode().split(',')[-2])
                 print(value)
 
                 # decode what we got and do something with it
                 found = True
                 if (value == "Wrist Flex In"):
                     print("turning left")
-                    new_position = SE3.Rz(np.pi/16) * position
+                    # new_position = SE3.Rz(np.pi/16) * position
                 elif (value == "Wrist Extend Out"):
                     print("turning right")
-                    new_position = SE3.Rz(-np.pi/16) * position
+                    # new_position = SE3.Rz(-np.pi/16) * position
                 # elif (value == "Elbow Flexion"):
                 #     q[1] = q[1] + np.pi/50
                 # elif (value == "Elbow Extension"):
                 #     q[1] = q[1] - np.pi/50
                 elif (value == "Wrist Adduction"):
                     print("arm going down")
-                    new_position = SE3(0, 0, -.5) * position 
-                    new_position.t[2] = min(-.1, new_position.t[2])
+                    new_position = SE3.Ry(np.pi/8) * position 
 
                 elif (value == "Wrist Abduction"):
                     print("arm going up")
-                    new_position = SE3(0, 0, .5) * position
+                    new_position = SE3.Ry(-np.pi/8) * position 
                 elif (value == "Power Grasp"):
                     print("Spraying water")
                 else:
@@ -88,6 +90,7 @@ def start_server(host='localhost', port=65432):
                         traj_q = rtb.jtraj(q0 = q, qf = results.q, t = 20)
                         position = new_position
                         q = results.q
+                        print('servo angles', -results.q[1]*180/np.pi, (-results.q[2])*180/np.pi)
                         bot.plot(traj_q.q, dt=0.1, backend = 'pyplot')
                 
                 # print(position)
