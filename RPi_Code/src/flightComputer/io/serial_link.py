@@ -6,7 +6,15 @@ class SerialLink:
         self.log = logging.getLogger(self.__class__.__name__)
         self._lock = threading.Lock()               # ← add this
         try:
-            self.ser = serial.Serial(port, baud, timeout=timeout)
+            # self.ser = serial.Serial(port, baud, timeout=timeout)
+            # serial_link.py  (where SerialLink creates self.ser)
+
+            self.ser = serial.Serial(
+                port, baud, timeout=0.02,
+                rtscts=False,  dsrdtr=False                      # <── important
+            )
+            self.ser.setDTR(False)    # keep RESET high
+
             self.log.info("Opened %s @ %d", port, baud)
             time.sleep(2)  # Arduino reset or FTDI settle
         except Exception as e:

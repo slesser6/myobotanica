@@ -20,16 +20,21 @@ class ArduinoController(SerialLink):
         self.log = logging.getLogger("Arduino")
 
     # ---------- private helpers ----------------------------------------
-    def _wait_response(self, timeout: float = 2.0) -> str:
-        """Block until a non‑empty line is received or timeout expires."""
+    def _wait_response(self, timeout=1.0, poll=0.01) -> str:
         end = time.time() + timeout
         while time.time() < end:
             line = self.read_line()
-            if line:
-                self.log.debug("RX %s", line)
-                return line
-            time.sleep(0.1)
-        return ""
+            if not line:
+                time.sleep(poll)
+                continue
+            if line.startswith("OK READY"):       #   ← ignore banner
+                self.log.debug("skip banner")
+                continue
+            self.log.debug("RX %s", line)
+            return line
+        return ""                 # timeout
+
+
 
     # ---------- public API ---------------------------------------------
     def send_command(self, command: str) -> str:
@@ -52,28 +57,30 @@ class ArduinoController(SerialLink):
 
         cmd = parts[0].upper()
 
-        # ---------- SERVO ---------------------------------------------
-        if cmd == _CMD_SERVO and len(parts) >= 3:
-            axis, angle = parts[1].upper(), parts[2].strip()
-            if axis not in _AXES:
-                return f"Unknown servo axis '{axis}'."
-            payload = f"{_CMD_SERVO}:{axis}:{angle}"
-            self.log.debug(f"SERVO Sending Command: {payload}")
-            self.write_line(payload)
-            self.flush()
-            resp = self._wait_response(3)
-            return resp or f"Sent servo {axis} -> {angle}; no ACK."
+        # ---------- SERVO ---------------------------------------------      
+        if cmd == _CMD_SERVO:
+            # Expect exactly 4 fields:  SERVO:BOTH:<inner>:<outer>
+            if len(parts) != 4 or parts[1].upper() != "BOTH":
+                return (f"Use the form SERVO:BOTH:<inner>:<outer> (got {command})")
 
-        # ---------- PUMP ----------------------------------------------
-        # if cmd == _CMD_PUMP and len(parts) >= 2:
-        #     state = parts[1].upper()
-        #     if state not in {"ON", "OFF"}:
-        #         return "Pump state must be ON or OFF."
-        #     self.write_line(f"{_CMD_PUMP}:{state}")
-        #     self.flush()
-        #     resp = self._wait_response(3)
-        #     return resp or f"Pump {state}; no ACK."
-        
+            inner, outer = parts[2].strip(), parts[3].strip()
+
+            # --- timed write / read ---------------------------------------
+            t0 = time.perf_counter()
+            self.write_line(f"SERVO:BOTH:{inner}:{outer}")
+            # self.flush()
+
+            reply = self._wait_response(timeout=1.0, poll=0.01)
+            dt_ms = (time.perf_counter() - t0) * 1000.0
+
+            # one concise log entry
+            self.log.info("SERVO %-3s %-3s  %.1f ms  %s",
+                        inner, outer, dt_ms,
+                        reply or "<timeout>")
+
+            return reply or "No ACK"
+
+
         def set_offset(self, axis: str, degrees: int) -> str:
             """OFFSET:PITCH:-10 → shifts zero by -10°"""
             axis = axis.upper()
@@ -83,6 +90,7 @@ class ArduinoController(SerialLink):
             self.flush()
             return self._wait_response()
 
+        # ---------- PUMP ----------------------------------------------
         def pump_on_ms(self, ms: int) -> str:
             """Turn pump on for <ms> milliseconds."""
             self.write_line(f"{_CMD_PUMP}:ON:{ms}")
@@ -94,5 +102,8 @@ class ArduinoController(SerialLink):
             self.write_line(_CMD_STATE)
             self.flush()
             return self._wait_response()
+        
+        def __del__(self):
+            self.log.info("ArduinoController %s GC-d", self)   # should appear once at exit
 
         return f"Unknown Arduino command: {command}"

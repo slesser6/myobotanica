@@ -16,12 +16,20 @@ class Dispatcher(threading.Thread):
 
     def run(self):
         self.log.info("Dispatcher started")
+        # while True:
+        #     try:
+        #         # cmd = BUS.get(timeout=0.5)    # grab the next line pushed by RadioReceiver
+        #         cmd = BUS.get(timeout=2)
+        #     except queue.Empty:
+        #         continue
+
         while True:
             try:
-                # cmd = BUS.get(timeout=0.5)    # grab the next line pushed by RadioReceiver
-                cmd = BUS.get(timeout=2)
+                cmd = BUS.get_nowait()          # returns immediately
             except queue.Empty:
+                time.sleep(0.02)                # 20 ms idle nap
                 continue
+
 
             # ignore telemetry JSON blobs
             if cmd.lstrip().startswith("{"):
@@ -46,4 +54,4 @@ class Dispatcher(threading.Thread):
             else:
                 self.log.warning("Unknown prefix %s", prefix)
 
-            time.sleep(10)
+            # time.sleep(10)

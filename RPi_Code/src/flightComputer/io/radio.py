@@ -10,13 +10,6 @@ class RadioReceiver(threading.Thread, SerialLink):
         self.bus = bus
         self.log = logging.getLogger("Radio")
 
-    # def run(self):
-    #     self.log.info("Listening…")
-    #     while True:
-    #         line = self.read_line()
-    #         if line:
-    #             self.log.debug("RX %s", line)
-    #             self.bus.put(line)
     def run(self):
         self.log.info("Listening…")
         while True:
@@ -29,10 +22,6 @@ class RadioReceiver(threading.Thread, SerialLink):
                 self.log.error("Radio error: %s", e)
                 time.sleep(0.5)
 
-    # def send(self, text: str):
-    #     self.write_line(text)
-    #     self.log.debug("TX %s", text)
-    
     def send(self, text: str):
         self.write_line(text)
         if self.ser:
