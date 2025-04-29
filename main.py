@@ -3,6 +3,7 @@ from src.classifier import Classification
 
 import time
 import sys
+from numpy import pi
 
 def main():
 
@@ -16,6 +17,8 @@ def main():
         while(1):
             classification, position = o.loop()
             joint_positions = o.run_calculations()
+            joint_positions[1] = (joint_positions[1]*180/pi)+90
+            joint_positions[2] = (joint_positions[2]*180/pi)+90
 
             cmds = []
             if classification == Classification.WRIST_FLEX_TURN_LEFT:
@@ -23,11 +26,11 @@ def main():
             elif classification == Classification.WRIST_EXT_TURN_RIGHT:
                 cmds.append((f"FC:YAW:RIGHT\n", 5, "END_RESPONSE"))
             elif classification == Classification.WRIST_ADD_ARM_DOWN:
-                cmds.append((f"AR:SERVO:PITCH:{joint_positions[1]}\n", 3, "END_RESPONSE"))
-                cmds.append((f"AR:SERVO:PITCH2:{joint_positions[2]}\n", 3, "END_RESPONSE"))
+                cmds.append((f"AR:SERVO:PITCH:{joint_positions[1]}\nAR:SERVO:PITCH2:{joint_positions[2]}\n", 3, "END_RESPONSE"))
+                # cmds.append((f"AR:SERVO:PITCH2:{joint_positions[2]}\n", 3, "END_RESPONSE"))
             elif classification == Classification.WRIST_ABD_ARM_UP:
-                cmds.append((f"AR:SERVO:PITCH:{joint_positions[1]}\n", 3, "END_RESPONSE"))
-                cmds.append((f"AR:SERVO:PITCH2:{joint_positions[2]}\n", 3, "END_RESPONSE"))
+                cmds.append((f"AR:SERVO:PITCH:{joint_positions[1]}\nAR:SERVO:PITCH2:{joint_positions[2]}\n", 3, "END_RESPONSE"))
+                # cmds.append((f"AR:SERVO:PITCH2:{joint_positions[2]}\n", 3, "END_RESPONSE"))
 
             if classification == Classification.GRASP_SPRAY:
                 cmds.append((f"AR:PUMP:ON\n", 3, "END_RESPONSE"))

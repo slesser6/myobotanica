@@ -59,6 +59,10 @@ class Myoband:
         if not data:
             return
         value = (data.decode())
+        print('value', value)
+        split = value.split(',')
+        print(split)
+        value = split[-2]
         self._logger.debug(f"Classification: {value}")
         if (value == "Wrist Flex In"):
             self.classification = Classification.WRIST_FLEX_TURN_LEFT

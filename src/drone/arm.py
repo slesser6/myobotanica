@@ -23,10 +23,11 @@ class Arm(rtb.DHRobot):
             ),
             rtb.RevoluteDH(
                 a = 1.833,
-                # qlim = [-np.pi/2, 0]
+                qlim = [-np.pi/2, np.pi/2]
             ),
             rtb.RevoluteDH(
                 a = 1.81,
+                qlim = [-np.pi/2, np.pi/2]
             )
         ]
 
