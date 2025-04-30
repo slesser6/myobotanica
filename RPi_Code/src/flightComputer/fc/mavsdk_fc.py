@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio, logging, json, time, math, pathlib, tempfile, subprocess
 from typing import Optional, Tuple, Union
 import threading
+import grpc
 
 import mavsdk                            # pip install "mavsdk>=1.4"
 from mavsdk.action import ActionError, ActionResult 
@@ -123,17 +124,20 @@ class FlightController:                            # same public name!
 
             self.log.info("✅ MAVSDK connected")
 
-            if self.sim:
-                try:
-                    # a) turn off pre-arm checks (keeps old DroneKit behaviour)
-                    # await self._drone.param.set_param_int("ARMING_CHECK", 0)
+            try:
+                # --- make SITL behave like the old DroneKit demo ----------
+                await self._drone.param.set_param_float("ARMING_CHECK",     0.0)
+                # await self._drone.param.set_param_float("BRD_SAFETY_MASK", 0.0)
 
-                    # b) make sure frame parameters exist
-                    # await self._drone.param.set_param_int("FRAME_CLASS", 1)
-                    # await self._drone.param.set_param_int("FRAME_TYPE",  1)
-                    self.log.debug("SIM → FRAME_CLASS=1, FRAME_TYPE=1, ARMING_CHECK=0")
-                except Exception as e:
-                    self.log.warning("Could not init SIM params: %s", e)
+                self.log.debug("SIM params + telemetry rates applied")
+            except Exception as e:
+                self.log.warning("Could not init SIM params: %s", e)
+
+
+            # --- ask for telemetry (rates in Hz) ---------------------
+            await self._drone.telemetry.set_rate_battery(1.0)      # Hz
+            await self._drone.telemetry.set_rate_position(5.0)
+            await self._drone.telemetry.set_rate_attitude_euler(10.0)
 
             self._connected = True
             self._connected_evt.set()     # ← tell the other threads
@@ -145,27 +149,35 @@ class FlightController:                            # same public name!
             break
         
     async def _cache_battery(self):
-        async for msg in self._drone.telemetry.battery():
-            # self._cache["batt"] = msg
-            # self._cache_ready.set()
-            
-            self._cache["batt"] = msg
-            self._signal_if_complete()
+        while True:
+            try:
+                async for msg in self._drone.telemetry.battery():
+                    self._cache["batt"] = msg
+                    self._signal_if_complete()
+            except grpc.aio.AioRpcError:
+                self.log.warning("battery stream dropped - reconnecting …")
+                await asyncio.sleep(1.0)       # yield, then re-subscribe
 
     async def _cache_position(self):
-        async for msg in self._drone.telemetry.position():
-            # self._cache["pos"] = msg
-            # self._cache_ready.set()
-            self.log.debug("POS", msg.latitude_deg, msg.longitude_deg, msg.relative_altitude_m)        #  ←  TEMP
-            self._cache["pos"] = msg
-            self._signal_if_complete()
+        while True:
+            try:
+                async for msg in self._drone.telemetry.position():
+                    # self.log.debug("POS %.7f %.7f %.2f",msg.latitude_deg, msg.longitude_deg, msg.relative_altitude_m)
+                    self._cache["pos"] = msg
+                    self._signal_if_complete()
+            except grpc.aio.AioRpcError:
+                self.log.warning("position stream dropped - reconnecting …")
+                await asyncio.sleep(1.0)       # yield, then re-subscribe
 
     async def _cache_attitude(self):
-        async for msg in self._drone.telemetry.attitude_euler():
-            # self._cache["att"] = msg
-            # self._cache_ready.set()        
-            self._cache["att"] = msg
-            self._signal_if_complete()
+        while True:
+            try:
+                async for msg in self._drone.telemetry.attitude_euler():       
+                    self._cache["att"] = msg
+                    self._signal_if_complete()
+            except grpc.aio.AioRpcError:
+                self.log.warning("telemetry stream dropped - reconnecting …")
+                await asyncio.sleep(1.0)       # yield, then re-subscribe                    
             
             
     def _signal_if_complete(self):
@@ -174,7 +186,7 @@ class FlightController:                            # same public name!
         at least one message of *each* stream.  Called by the three
         cache-tasks above (they all run on `self._loop`).
         """
-        self.log.debug("signal?", self._cache)
+        # self.log.debug("signal?", self._cache)
         if (not self._ready_once
                 and all(self._cache.values())):   # all three non-None?
             self._cache_ready.set()
@@ -247,31 +259,31 @@ class FlightController:                            # same public name!
             if time.time() - t0 > timeout:
                 raise RuntimeError("Could not enter GUIDED mode")    
 
-    async def _takeoff_async(self, alt: float = 2.0):
-        # 0) ask (politely) for the altitude we want; ignore time-outs
-        try:
-            await self._drone.param.set_param_float("TKOFF_ALT", alt)
-        except Exception:
-            pass
-
-        # 1) keep sending TAKEOFF until the autopilot accepts it
-        while True:
+    # ── in FlightController._takeoff_async ────────────────────────────
+    async def _takeoff_async(self, alt: float = 2.0, timeout: float = 30.0):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
             try:
-                await self._drone.action.takeoff()           # returns on SUCCESS
-                break                                        # ✓ accepted
+                # await self._ensure_guided()                 # mode change
+                await self._drone.action.arm()
+                await self._drone.action.takeoff()
+                break                                       # ✓ accepted
             except ActionError as err:
-                if err._result.result in _retryable:         # << change here
-                    await asyncio.sleep(1.0)                 # wait → retry
+                if err._result.result in _retryable:
+                    await asyncio.sleep(1.0)                # wait, then retry
                     continue
-                raise                                         # anything else
+                return f"ERR Take-off failed: {err._result.result_str}\nEND_RESPONSE"
 
-        # 2) wait until we actually climb
-        async for pos in self._drone.telemetry.position():
-            if pos.relative_altitude_m >= 0.95 * alt:
-                break
+        else:  # loop exhausted
+            return "ERR Take-off timeout\nEND_RESPONSE"
 
-        return f"Reached {alt:.1f} m\nEND_RESPONSE"
-
+        # 3) wait until we actually climb
+        try:
+            async for pos in self._drone.telemetry.position():
+                if pos.relative_altitude_m >= 0.95 * alt:
+                    return f"Reached {alt:.1f} m\nEND_RESPONSE"
+        except asyncio.CancelledError:
+            return "ERR Link lost during climb\nEND_RESPONSE"
 
     def land_drone(self):
         return self._run(self._land_async())
@@ -286,8 +298,8 @@ class FlightController:                            # same public name!
     # -------- movement -------------------------------------------------
     def move(self,
              direction: Union[str, Tuple[float, float, float]] = "FWD",
-             distance: float = 2.0,
-             velocity: float = 1.0,
+             distance: float = 1.0,
+             velocity: float = 0.5,
              block: bool = True,
              duration: float | None = None):
         return self._run(
@@ -308,34 +320,76 @@ class FlightController:                            # same public name!
         mag = math.sqrt(sum(v*v for v in vec))
         unit = tuple(v/mag for v in vec)
         duration = duration or distance / velocity
-        vx, vy, vz = (u*velocity for u in unit)
+        vx, vy, vz = (u * velocity for u in unit)
 
+        # Log start position
+        start = self._cache["pos"]
+        if start:
+            self.log.info(
+                "MOVE %s start @ lat=%.7f lon=%.7f alt=%.2f",
+                direction,
+                start.latitude_deg,
+                start.longitude_deg,
+                start.relative_altitude_m
+            )
+
+        # Send initial setpoint and enter offboard
         await self._start_offboard_once()
         await self._drone.offboard.set_velocity_ned(
-            VelocityNedYaw(vx, vy, -vz, 0))
+            VelocityNedYaw(vx, vy, -vz, 0)
+        )
         await asyncio.sleep(duration)
         await self._drone.offboard.set_velocity_ned(
-            VelocityNedYaw(0, 0, 0, 0))
+            VelocityNedYaw(0, 0, 0, 0)
+        )
+
+        # Log end position
+        end = self._cache["pos"]
+        if end:
+            self.log.info(
+                "MOVE %s end   @ lat=%.7f lon=%.7f alt=%.2f",
+                direction,
+                end.latitude_deg,
+                end.longitude_deg,
+                end.relative_altitude_m
+            )
+
         return f"MOVE OK {direction} {distance} m\nEND_RESPONSE"
+
 
     # -------- yaw ------------------------------------------------------
     def yaw_drone(self, arg: str, angle=15):
         return self._run(self._yaw_async(arg, angle))
 
+
     async def _yaw_async(self, arg, angle):
         if arg.upper() in ("LEFT", "YAWLEFT"):
             yaw_rate = -abs(angle)
         elif arg.upper() in ("RIGHT", "YAWRIGHT"):
-            yaw_rate =  abs(angle)
-        else:                                    # numeric value
+            yaw_rate = abs(angle)
+        else:
             yaw_rate = float(arg)
 
+        # Log start yaw
+        start_att = self._cache["att"]
+        if start_att:
+            self.log.info("YAW %s start: %.1f°", arg, start_att.yaw_deg)
+
+        # Execute yaw
         await self._start_offboard_once()
         await self._drone.offboard.set_velocity_ned(
-            VelocityNedYaw(0, 0, 0, yaw_rate))
+            VelocityNedYaw(0, 0, 0, yaw_rate)
+        )
         await asyncio.sleep(2)
         await self._drone.offboard.set_velocity_ned(
-            VelocityNedYaw(0, 0, 0, 0))
+            VelocityNedYaw(0, 0, 0, 0)
+        )
+
+        # Log end yaw
+        end_att = self._cache["att"]
+        if end_att:
+            self.log.info("YAW %s end:   %.1f°", arg, end_att.yaw_deg)
+
         return f"YAW Δ≈{yaw_rate}°\nEND_RESPONSE"
 
     # -------- telemetry ------------------------------------------------
@@ -395,10 +449,14 @@ class FlightController:                            # same public name!
     # -------- internal -------------------------------------------------
     async def _start_offboard_once(self):
         try:
+            # send a neutral set-point so the first start() never fails
+            await self._drone.offboard.set_velocity_ned(
+                    VelocityNedYaw(0, 0, 0, 0))
             await self._drone.offboard.start()
         except OffboardError as err:
-            if err._result.result != mavsdk.offboard.OffboardResult.Result.BUSY:
+            if err._result.result != OffboardResult.Result.BUSY:
                 raise
+
 
     def _run(self, coro, block: bool = True):
         """Ensure the asyncio loop is up, connect on-demand, then run *coro*."""

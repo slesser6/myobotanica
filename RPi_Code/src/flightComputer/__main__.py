@@ -8,9 +8,10 @@ import asyncio, mavsdk
 
 def main() -> None:
     init()
-    disp = Dispatcher()        # creates RadioReceiver
-    disp.start()               # start the thread
-
+    disp = Dispatcher()     # creates RadioReceiver
+    disp.start()            # start the thread
+    FC.connect()            # launch SITL + MAVSDK
+     
     try:
         # lazy-connect: will happen automatically on first command
         while disp.is_alive():  # keep the main thread idle
@@ -31,12 +32,3 @@ def main() -> None:
 if __name__ == "__main__":
     main()
     
-
-async def main():
-    drone = mavsdk.System()
-    await drone.connect(system_address="udp://:14540")
-    async for pos in drone.telemetry.position():
-        print(pos)
-        break
-
-asyncio.run(main())

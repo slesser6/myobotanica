@@ -1,20 +1,20 @@
-import os
-import subprocess
-import tempfile
-import pathlib
-import logging
-import time
+import os, subprocess, subprocess, tempfile, pathlib, logging, time
 from typing import Union
 
 _log = logging.getLogger(__name__)
 
-# ── default location *unless* the user sets $ARDUPILOT_SITL_BIN ─────────
+# ── where your ArduPilot repo lives ──────────────────────────────
+ARDUPILOT = pathlib.Path("/home/OctoDronePi/ardupilot")
+
+# ①  quad.parm lives in the *same* directory as this sitl.py
+DEFAULTS = pathlib.Path(__file__).parent / "quad.parm"
+
 _DEFAULT_BIN = pathlib.Path(
     os.environ.get(
         "ARDUPILOT_SITL_BIN",
-        pathlib.Path.home() / "ardupilot" / "build" / "sitl" / "bin" / "arducopter"
+        ARDUPILOT / "build" / "sitl" / "bin" / "arducopter"
     )
-).expanduser()
+)
 
 class SitlManager:
     """
@@ -40,24 +40,19 @@ class SitlManager:
 
         workdir = tempfile.mkdtemp(prefix="sitl_")
 
-        # ---- write FRAME_CLASS / FRAME_TYPE into a tiny defaults file ----
-        defaults = pathlib.Path(workdir) / "frame.par"
-        defaults.write_text("""\
-        FRAME_CLASS,1
-        FRAME_TYPE,1
-        ARMING_CHECK,0
-        EK3_REQUIRE_POS,0
-        BATT_MONITOR,4
-        SIM_BATT_VOLTAGE,12.60
-        """)
+        DEFAULTS = (
+            pathlib.Path(__file__).parent / "quad.parm"
+        )
 
         cmd = [
-            str(self._bin), "-I", "0",
-            "--model",  "quad",
-            "--speedup","1",
-            "--serial0", f"udpclient:127.0.0.1:{udp_port}",
-            "--defaults", str(defaults),
+            str(_DEFAULT_BIN),
+            "-I", "0",
+            "--model", "quad",
+            "--speedup", "1",
+            "--defaults", str(DEFAULTS),          #  ← no extra “fc/”
+            "--serial0", "udpclient:127.0.0.1:14540",
         ]
+
 
         _log.info("Launching SITL: %s", " ".join(cmd))
 
