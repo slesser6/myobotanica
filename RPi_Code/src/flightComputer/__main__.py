@@ -4,6 +4,8 @@ from flightComputer.routing.dispatcher import Dispatcher
 from flightComputer.fc                 import FC
 import time, logging, signal, sys
 
+import asyncio, mavsdk
+
 def main() -> None:
     init()
     disp = Dispatcher()        # creates RadioReceiver
@@ -28,3 +30,13 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    
+
+async def main():
+    drone = mavsdk.System()
+    await drone.connect(system_address="udp://:14540")
+    async for pos in drone.telemetry.position():
+        print(pos)
+        break
+
+asyncio.run(main())

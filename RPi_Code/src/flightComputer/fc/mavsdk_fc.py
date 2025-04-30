@@ -9,11 +9,19 @@ from typing import Optional, Tuple, Union
 import threading
 
 import mavsdk                            # pip install "mavsdk>=1.4"
+from mavsdk.action import ActionError, ActionResult 
+from mavsdk.telemetry import FlightMode   
 from mavsdk.offboard import (OffboardError, VelocityNedYaw)
 from .sitl import SitlManager 
 
 _log = logging.getLogger("MavsdkFC")
 logging.getLogger("mavsdk").setLevel(logging.DEBUG)
+
+_retryable = {
+    ActionResult.Result.FAILED,          # EKF/GPS not ready yet
+    ActionResult.Result.COMMAND_DENIED,  # mode / state not right
+    ActionResult.Result.BUSY,            # autopilot still doing something
+}
 
 # ──────────────────────── small helpers ──────────────────────────────
 def _deg(rad: float) -> float:
@@ -51,17 +59,48 @@ class FlightController:                            # same public name!
         self._tele_th    : threading.Thread | None = None
         self._telem_suspended = asyncio.Event()
         self._telem_suspended.clear()
+        
+        # self._cache = {"batt": None, "pos": None, "att": None}
+        # self._cache_ready = asyncio.Event()         # first full sample
+        # self._cache_ready = None
+        self._cache = {"batt": None, "pos": None, "att": None}
+        self._cache_ready = None                    # will be bound to the worker loop
+        self._ready_once   = False  # remember if we've already set it
+        
+        
+        self._connect_lock  = threading.Lock()
+        self._connected_evt = threading.Event()   # set after ✅ MAVSDK connected
 
     # ── internal: bring up asyncio loop + schedule connect ──────────
     def _ensure_loop(self):
-        if self._loop:
+        # fast path – already connected
+        if self._connected_evt.is_set():
             return
-        self._loop = asyncio.new_event_loop()
-        self._loop_th = threading.Thread(
-            target=self._loop.run_forever, daemon=True
-        )
-        self._loop_th.start()
-        asyncio.run_coroutine_threadsafe(self._async_connect(), self._loop)
+
+        # only one thread may run the section below
+        with self._connect_lock:
+            if self._connected_evt.is_set():          # other thread won the race
+                return
+
+            if not self._loop:
+                self._loop = asyncio.new_event_loop()
+                self._loop_th = threading.Thread(
+                    target=self._loop.run_forever, daemon=True)
+                self._loop_th.start()
+                
+                # ------ create per-loop Event *inside* that very loop ------
+                self._cache_ready = asyncio.Event(loop=self._loop)
+
+            # schedule connect once
+            if not hasattr(self, "_connect_task"):
+                self._connect_task = asyncio.run_coroutine_threadsafe(
+                    self._async_connect(), self._loop)
+
+            # wait (max 30 s) until the async part signals “ready”
+            if not self._connected_evt.wait(timeout=30):
+                raise RuntimeError(
+                    f"MAVSDK connection timeout on {self.addr}")
+
 
     async def _async_connect(self):
         # 1) launch SITL when in simulation_mode
@@ -97,7 +136,49 @@ class FlightController:                            # same public name!
                     self.log.warning("Could not init SIM params: %s", e)
 
             self._connected = True
+            self._connected_evt.set()     # ← tell the other threads
+            
+            # start background listeners – they run until shutdown
+            self._loop.create_task(self._cache_battery())
+            self._loop.create_task(self._cache_position())
+            self._loop.create_task(self._cache_attitude())
             break
+        
+    async def _cache_battery(self):
+        async for msg in self._drone.telemetry.battery():
+            # self._cache["batt"] = msg
+            # self._cache_ready.set()
+            
+            self._cache["batt"] = msg
+            self._signal_if_complete()
+
+    async def _cache_position(self):
+        async for msg in self._drone.telemetry.position():
+            # self._cache["pos"] = msg
+            # self._cache_ready.set()
+            self.log.debug("POS", msg.latitude_deg, msg.longitude_deg, msg.relative_altitude_m)        #  ←  TEMP
+            self._cache["pos"] = msg
+            self._signal_if_complete()
+
+    async def _cache_attitude(self):
+        async for msg in self._drone.telemetry.attitude_euler():
+            # self._cache["att"] = msg
+            # self._cache_ready.set()        
+            self._cache["att"] = msg
+            self._signal_if_complete()
+            
+            
+    def _signal_if_complete(self):
+        """
+        Fire the `_cache_ready` event **once** after we've received
+        at least one message of *each* stream.  Called by the three
+        cache-tasks above (they all run on `self._loop`).
+        """
+        self.log.debug("signal?", self._cache)
+        if (not self._ready_once
+                and all(self._cache.values())):   # all three non-None?
+            self._cache_ready.set()
+            self._ready_once = True            
         
     def connect(self, timeout: float = 10.0):
         self._ensure_loop()
@@ -141,19 +222,15 @@ class FlightController:                            # same public name!
     def takeoff_drone(self, alt=2.0):
         return self._run(self._takeoff_async(alt))
     
-    async def _wait_until_position_ok(self, timeout: float = 60.0) -> None:
-        """
-        Wait until the EKF reports a *usable* global position.
-        In SITL we don't require the home-position flag.
-        """
+    async def _wait_until_position_ok(self, timeout=90.0):
         t0 = time.time()
-        async for health in self._drone.telemetry.health():
-            if health.is_global_position_ok:            # ← ONLY this flag
+        async for h in self._drone.telemetry.health():
+            if (h.is_global_position_ok
+                    and h.is_local_position_ok
+                    and (getattr(h, "is_home_position_ok", True))):
                 return
             if time.time() - t0 > timeout:
-                raise RuntimeError(
-                    f"GPS/EKF still not ready after {timeout} s"
-                )
+                raise RuntimeError("EKF never became ready (no position/home)")
 
 
     async def _ensure_guided(self, timeout: float = 5.0) -> None:
@@ -171,19 +248,24 @@ class FlightController:                            # same public name!
                 raise RuntimeError("Could not enter GUIDED mode")    
 
     async def _takeoff_async(self, alt: float = 2.0):
-        # 0) wait until the EKF is happy
-        await self._wait_until_position_ok(timeout=60.0)
-
-        # 1) try to write TKOFF_ALT (ignore failures)
+        # 0) ask (politely) for the altitude we want; ignore time-outs
         try:
             await self._drone.param.set_param_float("TKOFF_ALT", alt)
         except Exception:
             pass
 
-        # 2) tell ArduCopter to take off (this switches to GUIDED automatically)
-        await self._drone.action.takeoff()
+        # 1) keep sending TAKEOFF until the autopilot accepts it
+        while True:
+            try:
+                await self._drone.action.takeoff()           # returns on SUCCESS
+                break                                        # ✓ accepted
+            except ActionError as err:
+                if err._result.result in _retryable:         # << change here
+                    await asyncio.sleep(1.0)                 # wait → retry
+                    continue
+                raise                                         # anything else
 
-        # 3) wait until we have climbed ~95 % of the target altitude
+        # 2) wait until we actually climb
         async for pos in self._drone.telemetry.position():
             if pos.relative_altitude_m >= 0.95 * alt:
                 break
@@ -279,32 +361,33 @@ class FlightController:                            # same public name!
         return self._run(self._state_async())
 
     async def _state_async(self):
-        """Return battery/position/attitude; never block >2 s on silent streams."""
-        async def first(gen, timeout=2.0):
-            try:
-                return await asyncio.wait_for(gen.__anext__(), timeout)
-            except (asyncio.TimeoutError, StopAsyncIteration):
-                return None                                   # ← default = None
+        """
+        Return the most recent battery / position / attitude.
+        Wait ⩽5 s for the **first** full sample, afterwards never block.
+        """
+        # Wait until all three keys are non-None (first message of each stream)
+        try:
+            await asyncio.wait_for(self._cache_ready.wait(), 5.0)
+        except asyncio.TimeoutError:
+            pass    # continue – you may still have partial data
 
-        batt, pos, att = await asyncio.gather(
-            first(self._drone.telemetry.battery()),
-            first(self._drone.telemetry.position()),
-            first(self._drone.telemetry.attitude_euler()),
-        )
+        batt = self._cache["batt"]
+        pos  = self._cache["pos"]
+        att  = self._cache["att"]
 
         return {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "battery":  {"voltage": batt.voltage_v        if batt else 0.0,
-                         "remaining": batt.remaining_percent if batt else 0.0},
-            "location": {"lat": pos.latitude_deg          if pos else 0.0,
-                         "lon": pos.longitude_deg         if pos else 0.0,
-                         "rel_alt": pos.relative_altitude_m if pos else 0.0},
-            "attitude": {"roll": att.roll_deg             if att else 0.0,
-                         "pitch": att.pitch_deg           if att else 0.0,
-                         "yaw": att.yaw_deg               if att else 0.0},
+            "battery":  {"voltage": batt.voltage_v              if batt else 0.0,
+                        "remaining": batt.remaining_percent    if batt else 0.0},
+            "location": {"lat": pos.latitude_deg                if pos else 0.0,
+                        "lon": pos.longitude_deg               if pos else 0.0,
+                        "rel_alt": pos.relative_altitude_m     if pos else 0.0},
+            "attitude": {"roll": att.roll_deg                   if att else 0.0,
+                        "pitch": att.pitch_deg                 if att else 0.0,
+                        "yaw": att.yaw_deg                     if att else 0.0},
         }
-        
 
+        
     def get_state(self):
         blob = json.dumps(self.get_state_dict(), indent=2)
         return blob + "\nEND_RESPONSE"

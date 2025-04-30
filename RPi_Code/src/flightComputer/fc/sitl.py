@@ -42,20 +42,23 @@ class SitlManager:
 
         # ---- write FRAME_CLASS / FRAME_TYPE into a tiny defaults file ----
         defaults = pathlib.Path(workdir) / "frame.par"
-        defaults.write_text(
-            "FRAME_CLASS,1\n"      # 1 = Copter
-            "FRAME_TYPE,1\n"       # 1 = X-layout
-            "ARMING_CHECK,0\n"     # optional: disable pre-arm checks
-        )
-        # -----------------------------------------------------------------
+        defaults.write_text("""\
+        FRAME_CLASS,1
+        FRAME_TYPE,1
+        ARMING_CHECK,0
+        EK3_REQUIRE_POS,0
+        BATT_MONITOR,4
+        SIM_BATT_VOLTAGE,12.60
+        """)
 
         cmd = [
             str(self._bin), "-I", "0",
-            "--model", "quad",
-            "--speedup", "1",
+            "--model",  "quad",
+            "--speedup","1",
             "--serial0", f"udpclient:127.0.0.1:{udp_port}",
-            "--defaults", str(defaults),        # <── new
+            "--defaults", str(defaults),
         ]
+
         _log.info("Launching SITL: %s", " ".join(cmd))
 
         self._proc = subprocess.Popen(cmd, cwd=workdir)
