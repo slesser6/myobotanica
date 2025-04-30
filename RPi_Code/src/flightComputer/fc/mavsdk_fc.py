@@ -3,196 +3,106 @@
 Async MAVSDK implementation that mimics the old DroneKit FlightController
 API so the ground-station and handlers keep working unchanged.
 """
-from __future__ import annotations
-import asyncio, logging, json, time, math, pathlib, tempfile, subprocess
-from typing import Optional, Tuple, Union
+
+# ──────────────────────── Imports ────────────────────────────────────
+# Standard library
+import asyncio
+import json
+import logging
+import math
+import pathlib
+import subprocess
+import tempfile
 import threading
+import time
+from typing import Optional, Tuple, Union
+
+# Third-party
 import grpc
+import mavsdk                              # pip install "mavsdk>=1.4"
+from mavsdk.action import ActionError, ActionResult
+from mavsdk.telemetry import FlightMode
+from mavsdk.offboard import OffboardError, VelocityNedYaw
 
-import mavsdk                            # pip install "mavsdk>=1.4"
-from mavsdk.action import ActionError, ActionResult 
-from mavsdk.telemetry import FlightMode   
-from mavsdk.offboard import (OffboardError, VelocityNedYaw)
-from .sitl import SitlManager 
+# Local
+from .sitl import SitlManager
 
+# ──────────────────────── Logger & Constants ─────────────────────────
 _log = logging.getLogger("MavsdkFC")
 logging.getLogger("mavsdk").setLevel(logging.DEBUG)
 
-_retryable = {
+# Which action errors should be retried automatically
+_RETRYABLE = {
     ActionResult.Result.FAILED,          # EKF/GPS not ready yet
-    ActionResult.Result.COMMAND_DENIED,  # mode / state not right
+    ActionResult.Result.COMMAND_DENIED,  # mode/state not right
     ActionResult.Result.BUSY,            # autopilot still doing something
 }
 
-# ──────────────────────── small helpers ──────────────────────────────
+# ──────────────────────── Helper Functions ───────────────────────────
 def _deg(rad: float) -> float:
+    """Convert radians to [0..360) degrees."""
     return (math.degrees(rad) + 360.0) % 360.0
 
 def _ned_distance(a, b) -> float:
-    """Euclidean distance in metres between two PositionNed structures."""
+    """
+    Euclidean distance (m) between two PositionNed structures.
+    """
     dx = a.north_m - b.north_m
     dy = a.east_m  - b.east_m
     dz = a.down_m  - b.down_m
-    return (dx*dx + dy*dy + dz*dz) ** 0.5
+    return math.sqrt(dx*dx + dy*dy + dz*dz)
 
 
-# ────────────────────────   main class   ─────────────────────────────
-class FlightController:                            # same public name!
-    # -------- life-cycle -------------------------------------------------
-    def __init__(self,
-                 connection_string: str = "udp://:14540",
-                 baud_rate: int      = 57600,
-                 simulation_mode: bool = False):
+# ──────────────────────── FlightController ───────────────────────────
+class FlightController:
+    """
+    High-level façade over MAVSDK System, plus optional SITL launch.
+    """
+
+    # ─────────────── Initialization & Teardown ────────────────────────
+    def __init__(
+        self,
+        connection_string: str = "udp://:14540",
+        baud_rate: int = 57600,
+        simulation_mode: bool = False
+    ):
+        """
+        Initialize logging, SITL manager (if sim), and prepare asyncio loop.
+        """
         self.log    = logging.getLogger("FlightController")
         self.addr   = connection_string
         self.baud   = baud_rate
         self.sim    = simulation_mode
-        self._connected = False
-        
-        print("SIM flag =", simulation_mode)   # should print True
-        
-        # ← create one SitlManager for the lifetime of this FC
+        print("SIM flag =", simulation_mode)
+
+        # SITL launcher (only used if sim=True)
         self._sitl = SitlManager()
 
+        # MAVSDK system and event loop placeholders
         self._drone      : mavsdk.System | None = None
         self._loop       : asyncio.AbstractEventLoop | None = None
         self._loop_th    : threading.Thread | None = None
+
+        # Telemetry thread
         self._tele_th    : threading.Thread | None = None
         self._telem_suspended = asyncio.Event()
         self._telem_suspended.clear()
-        
-        # self._cache = {"batt": None, "pos": None, "att": None}
-        # self._cache_ready = asyncio.Event()         # first full sample
-        # self._cache_ready = None
-        self._cache = {"batt": None, "pos": None, "att": None}
-        self._cache_ready = None                    # will be bound to the worker loop
-        self._ready_once   = False  # remember if we've already set it
-        
-        
-        self._connect_lock  = threading.Lock()
-        self._connected_evt = threading.Event()   # set after ✅ MAVSDK connected
 
-    # ── internal: bring up asyncio loop + schedule connect ──────────
-    def _ensure_loop(self):
-        # fast path – already connected
-        if self._connected_evt.is_set():
-            return
+        # Telemetry cache and readiness event
+        self._cache = {"batt": None, "pos": None, "att": None, "vel": None}
+        self._cache_ready = None
+        self._ready_once  = False
 
-        # only one thread may run the section below
-        with self._connect_lock:
-            if self._connected_evt.is_set():          # other thread won the race
-                return
+        # Connection synchronization
+        self._connected      = False
+        self._connect_lock   = threading.Lock()
+        self._connected_evt  = threading.Event()
 
-            if not self._loop:
-                self._loop = asyncio.new_event_loop()
-                self._loop_th = threading.Thread(
-                    target=self._loop.run_forever, daemon=True)
-                self._loop_th.start()
-                
-                # ------ create per-loop Event *inside* that very loop ------
-                self._cache_ready = asyncio.Event(loop=self._loop)
-
-            # schedule connect once
-            if not hasattr(self, "_connect_task"):
-                self._connect_task = asyncio.run_coroutine_threadsafe(
-                    self._async_connect(), self._loop)
-
-            # wait (max 30 s) until the async part signals “ready”
-            if not self._connected_evt.wait(timeout=30):
-                raise RuntimeError(
-                    f"MAVSDK connection timeout on {self.addr}")
-
-
-    async def _async_connect(self):
-        # 1) launch SITL when in simulation_mode
-        if self.sim:
-            try:
-                self.addr = self._sitl.start()       # udp://:14540
-            except Exception as e:
-                self.log.exception("Failed to launch SITL: %s", e)
-                return
-
-        # 2) connect MAVSDK
-        self._drone = mavsdk.System()
-        self.log.info("Connecting MAVSDK to %s …", self.addr)
-        await self._drone.connect(system_address=self.addr)
-
-        # 3) wait until MAVSDK has a link
-        async for state in self._drone.core.connection_state():
-            if not state.is_connected:
-                continue
-
-            self.log.info("✅ MAVSDK connected")
-
-            try:
-                # --- make SITL behave like the old DroneKit demo ----------
-                await self._drone.param.set_param_float("ARMING_CHECK",     0.0)
-                # await self._drone.param.set_param_float("BRD_SAFETY_MASK", 0.0)
-
-                self.log.debug("SIM params + telemetry rates applied")
-            except Exception as e:
-                self.log.warning("Could not init SIM params: %s", e)
-
-
-            # --- ask for telemetry (rates in Hz) ---------------------
-            await self._drone.telemetry.set_rate_battery(1.0)      # Hz
-            await self._drone.telemetry.set_rate_position(5.0)
-            await self._drone.telemetry.set_rate_attitude_euler(10.0)
-
-            self._connected = True
-            self._connected_evt.set()     # ← tell the other threads
-            
-            # start background listeners – they run until shutdown
-            self._loop.create_task(self._cache_battery())
-            self._loop.create_task(self._cache_position())
-            self._loop.create_task(self._cache_attitude())
-            break
-        
-    async def _cache_battery(self):
-        while True:
-            try:
-                async for msg in self._drone.telemetry.battery():
-                    self._cache["batt"] = msg
-                    self._signal_if_complete()
-            except grpc.aio.AioRpcError:
-                self.log.warning("battery stream dropped - reconnecting …")
-                await asyncio.sleep(1.0)       # yield, then re-subscribe
-
-    async def _cache_position(self):
-        while True:
-            try:
-                async for msg in self._drone.telemetry.position():
-                    # self.log.debug("POS %.7f %.7f %.2f",msg.latitude_deg, msg.longitude_deg, msg.relative_altitude_m)
-                    self._cache["pos"] = msg
-                    self._signal_if_complete()
-            except grpc.aio.AioRpcError:
-                self.log.warning("position stream dropped - reconnecting …")
-                await asyncio.sleep(1.0)       # yield, then re-subscribe
-
-    async def _cache_attitude(self):
-        while True:
-            try:
-                async for msg in self._drone.telemetry.attitude_euler():       
-                    self._cache["att"] = msg
-                    self._signal_if_complete()
-            except grpc.aio.AioRpcError:
-                self.log.warning("telemetry stream dropped - reconnecting …")
-                await asyncio.sleep(1.0)       # yield, then re-subscribe                    
-            
-            
-    def _signal_if_complete(self):
-        """
-        Fire the `_cache_ready` event **once** after we've received
-        at least one message of *each* stream.  Called by the three
-        cache-tasks above (they all run on `self._loop`).
-        """
-        # self.log.debug("signal?", self._cache)
-        if (not self._ready_once
-                and all(self._cache.values())):   # all three non-None?
-            self._cache_ready.set()
-            self._ready_once = True            
-        
     def connect(self, timeout: float = 10.0):
+        """
+        Ensure the asyncio loop is running and wait (up to timeout)
+        for MAVSDK to be connected.
+        """
         self._ensure_loop()
         t0 = time.time()
         while not self._connected:
@@ -201,6 +111,9 @@ class FlightController:                            # same public name!
             time.sleep(0.2)
 
     def shutdown(self):
+        """
+        Stop offboard, kill SITL (if any), and tear down the asyncio loop.
+        """
         if not self._loop:
             return
         # orderly shutdown of offboard
@@ -212,102 +125,274 @@ class FlightController:                            # same public name!
         self._loop_th.join(timeout=1.0)
 
     async def _async_shutdown(self):
+        """Internal: stop offboard mode gracefully."""
         try:
             await self._drone.offboard.stop()
         except Exception:
             pass
 
-    # -------- basic actions -------------------------------------------
-    def arm_drone(self):            # sync façade
+    # ─────────────── Connection Setup ─────────────────────────────────
+    def _ensure_loop(self):
+        """
+        Start the asyncio loop+thread if not already running,
+        and schedule _async_connect() exactly once.
+        """
+        if self._connected_evt.is_set():
+            return
+
+        with self._connect_lock:
+            if self._connected_evt.is_set():
+                return
+
+            if not self._loop:
+                self._loop = asyncio.new_event_loop()
+                self._loop_th = threading.Thread(
+                    target=self._loop.run_forever, daemon=True
+                )
+                self._loop_th.start()
+                self._cache_ready = asyncio.Event(loop=self._loop)
+
+            if not hasattr(self, "_connect_task"):
+                self._connect_task = asyncio.run_coroutine_threadsafe(
+                    self._async_connect(), self._loop
+                )
+
+            if not self._connected_evt.wait(timeout=30):
+                raise RuntimeError(f"MAVSDK connection timeout on {self.addr}")
+
+    async def _async_connect(self):
+        """
+        Coroutine that:
+         1) Launches SITL if in sim mode,
+         2) Connects MAVSDK System to self.addr,
+         3) Subscribes to telemetry streams,
+         4) Starts cache tasks.
+        """
+        if self.sim:
+            try:
+                self.addr = self._sitl.start()
+            except Exception as e:
+                self.log.exception("Failed to launch SITL: %s", e)
+                return
+
+        self._drone = mavsdk.System()
+        self.log.info("Connecting MAVSDK to %s …", self.addr)
+        await self._drone.connect(system_address=self.addr)
+
+        async for state in self._drone.core.connection_state():
+            if not state.is_connected:
+                continue
+
+            self.log.info("✅ MAVSDK connected")
+
+            # Simulation-only parameters
+            try:
+                await self._drone.param.set_param_float("ARMING_CHECK", 0.0)
+                self.log.debug("SIM params applied")
+            except Exception as e:
+                self.log.warning("Could not init SIM params: %s", e)
+
+            # Telemetry rates
+            await self._drone.telemetry.set_rate_battery(1.0)
+            await self._drone.telemetry.set_rate_position(5.0)
+            await self._drone.telemetry.set_rate_position_velocity_ned(5.0)
+            await self._drone.telemetry.set_rate_attitude_euler(10.0)
+
+            self._connected = True
+            self._connected_evt.set()
+
+            # Spawn background cache tasks
+            self._loop.create_task(self._cache_battery())
+            self._loop.create_task(self._cache_position())
+            self._loop.create_task(self._cache_attitude())
+            self._loop.create_task(self._cache_velocity_ned())
+            break
+
+    # ─────────────── Telemetry Caching ────────────────────────────────
+    async def _cache_battery(self):
+        """Continuously cache the latest battery telemetry."""
+        while True:
+            try:
+                async for msg in self._drone.telemetry.battery():
+                    self._cache["batt"] = msg
+                    self._signal_if_complete()
+            except grpc.aio.AioRpcError:
+                self.log.warning("battery stream dropped - reconnecting …")
+                await asyncio.sleep(1.0)
+
+    async def _cache_position(self):
+        """Continuously cache the latest global position telemetry."""
+        while True:
+            try:
+                async for msg in self._drone.telemetry.position():
+                    self._cache["pos"] = msg
+                    self._signal_if_complete()
+            except grpc.aio.AioRpcError:
+                self.log.warning("position stream dropped - reconnecting …")
+                await asyncio.sleep(1.0)
+
+    async def _cache_attitude(self):
+        """Continuously cache the latest attitude (Euler angles)."""
+        while True:
+            try:
+                async for msg in self._drone.telemetry.attitude_euler():
+                    self._cache["att"] = msg
+                    self._signal_if_complete()
+            except grpc.aio.AioRpcError:
+                self.log.warning("attitude stream dropped - reconnecting …")
+                await asyncio.sleep(1.0)
+
+    async def _cache_velocity_ned(self):
+        """Continuously cache the latest NED position from position_velocity_ned()."""
+        while True:
+            try:
+                async for pv in self._drone.telemetry.position_velocity_ned():
+                    self._cache["vel"] = pv.position
+            except grpc.aio.AioRpcError:
+                self.log.warning("velocity_ned stream dropped; reconnecting …")
+                await asyncio.sleep(1.0)
+
+    def _signal_if_complete(self):
+        """
+        Once we've received at least one sample of each stream,
+        fire the _cache_ready event exactly once.
+        """
+        if not self._ready_once and all(self._cache.values()):
+            self._cache_ready.set()
+            self._ready_once = True
+
+    # ─────────────── Action Helpers ────────────────────────────────────
+    def arm_drone(self):
+        """Synchronously arm the drone (blocks until complete)."""
         return self._run(self._arm_async())
 
     async def _arm_async(self, timeout: float = 20.0):
+        """
+        Coroutine to arm the drone, returning success/failure string.
+        """
         try:
             await self._drone.action.arm()
             return "Drone is ARMED.\nEND_RESPONSE"
-
-        except mavsdk.action.ActionError as err:
-            # err._result.result is an enum, err._result.result_str is the label
+        except ActionError as err:
             reason = err._result.result_str or "Unknown"
             return f"ERR ARM failed: {reason}\nEND_RESPONSE"
 
-    def takeoff_drone(self, alt=2.0):
+    def takeoff_drone(self, alt: float = 2.0):
+        """Synchronously take off to a given altitude."""
         return self._run(self._takeoff_async(alt))
-    
-    async def _wait_until_position_ok(self, timeout=90.0):
-        t0 = time.time()
-        async for h in self._drone.telemetry.health():
-            if (h.is_global_position_ok
-                    and h.is_local_position_ok
-                    and (getattr(h, "is_home_position_ok", True))):
-                return
-            if time.time() - t0 > timeout:
-                raise RuntimeError("EKF never became ready (no position/home)")
 
-
-    async def _ensure_guided(self, timeout: float = 5.0) -> None:
-        """
-        Put Copter into GUIDED and wait until the autopilot confirms
-        the mode change (or raise after *timeout* seconds).
-        """
-        await self._drone.action.set_flight_mode(FlightMode.GUIDED)
-
-        t0 = time.time()
-        async for mode in self._drone.telemetry.flight_mode():
-            if mode == FlightMode.GUIDED:
-                return                              # ✓ success
-            if time.time() - t0 > timeout:
-                raise RuntimeError("Could not enter GUIDED mode")    
-
-    # ── in FlightController._takeoff_async ────────────────────────────
     async def _takeoff_async(self, alt: float = 2.0, timeout: float = 30.0):
+        """
+        Coroutine to arm & take off, retrying on retryable errors,
+        then wait until reaching ~95% of target altitude.
+        """
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
-                # await self._ensure_guided()                 # mode change
                 await self._drone.action.arm()
                 await self._drone.action.takeoff()
-                break                                       # ✓ accepted
+                break
             except ActionError as err:
-                if err._result.result in _retryable:
-                    await asyncio.sleep(1.0)                # wait, then retry
+                if err._result.result in _RETRYABLE:
+                    await asyncio.sleep(1.0)
                     continue
                 return f"ERR Take-off failed: {err._result.result_str}\nEND_RESPONSE"
-
-        else:  # loop exhausted
+        else:
             return "ERR Take-off timeout\nEND_RESPONSE"
 
-        # 3) wait until we actually climb
+        # Wait for altitude
         try:
             async for pos in self._drone.telemetry.position():
+                current_alt = pos.relative_altitude_m
+                self.log.info("Climbing… current altitude: %.2f m", current_alt)
                 if pos.relative_altitude_m >= 0.95 * alt:
                     return f"Reached {alt:.1f} m\nEND_RESPONSE"
         except asyncio.CancelledError:
             return "ERR Link lost during climb\nEND_RESPONSE"
 
     def land_drone(self):
+        """Synchronously land the drone (blocks until on ground)."""
         return self._run(self._land_async())
 
     async def _land_async(self):
+        """
+        Coroutine to land and wait until on ground, logging altitude
+        on each update.
+        """
+        # 1) send the land command
         await self._drone.action.land()
+
+        # 2) then loop until we see ON_GROUND, but log altitude each tick
         async for state in self._drone.telemetry.landed_state():
+            # pull one position update so we can log current altitude
+            try:
+                pos = await asyncio.wait_for(
+                    self._drone.telemetry.position().__anext__(),
+                    timeout=1.0
+                )
+                current_alt = pos.relative_altitude_m
+                self.log.info("Landing… current altitude: %.2f m", current_alt)
+            except asyncio.TimeoutError:
+                # if no position came in, just skip the log this round
+                self.log.warning("Landing… no position update")
+
             if state == mavsdk.telemetry.LandedState.ON_GROUND:
+                self.log.info("Touchdown confirmed")
                 break
+
         return "Drone landed.\nEND_RESPONSE"
 
-    # -------- movement -------------------------------------------------
-    def move(self,
-             direction: Union[str, Tuple[float, float, float]] = "FWD",
-             distance: float = 1.0,
-             velocity: float = 0.5,
-             block: bool = True,
-             duration: float | None = None):
+
+    # ─────────────── Offboard Helpers ─────────────────────────────────
+    async def _ensure_guided(self, timeout: float = 5.0) -> None:
+        """
+        Switch to GUIDED mode and wait for confirmation (or raise).
+        """
+        await self._drone.action.set_flight_mode(FlightMode.GUIDED)
+        t0 = time.time()
+        async for mode in self._drone.telemetry.flight_mode():
+            if mode == FlightMode.GUIDED:
+                return
+            if time.time() - t0 > timeout:
+                raise RuntimeError("Could not enter GUIDED mode")
+
+    async def _start_offboard_once(self):
+        """
+        Send a neutral setpoint then start offboard mode once
+        so future set_velocity calls succeed.
+        """
+        try:
+            await self._drone.offboard.set_velocity_ned(VelocityNedYaw(0,0,0,0))
+            await self._drone.offboard.start()
+        except OffboardError as err:
+            if err._result.result != mavsdk.offboard.OffboardResult.Result.BUSY:
+                raise
+
+    # ─────────────── Movement & Yaw ───────────────────────────────────
+    def move(
+        self,
+        direction: Union[str, Tuple[float,float,float]] = "FWD",
+        distance: float = 1.0,
+        velocity: float = 0.5,
+        block: bool = True,
+        duration: Optional[float] = None
+    ):
+        """
+        Entry point for MOVE commands.  Returns end-string immediately if block=False.
+        """
         return self._run(
             self._move_async(direction, distance, velocity, duration),
             block=block
         )
 
     async def _move_async(self, direction, distance, velocity, duration):
+        """
+        Coroutine to:
+         1) Grab a start NED reading (if available),
+         2) Enter offboard and send velocity,
+         3) Sleep for duration,
+         4) Stop, grab end NED reading, and log Δ distance.
+        """
         aliases = {
             "FWD":  ( 1, 0, 0), "BACK": (-1, 0, 0),
             "RIGHT":( 0, 1, 0), "LEFT": ( 0,-1, 0),
@@ -319,50 +404,78 @@ class FlightController:                            # same public name!
 
         mag = math.sqrt(sum(v*v for v in vec))
         unit = tuple(v/mag for v in vec)
-        duration = duration or distance / velocity
+        duration = duration or (distance / velocity)
         vx, vy, vz = (u * velocity for u in unit)
 
-        # Log start position
-        start = self._cache["pos"]
-        if start:
-            self.log.info(
-                "MOVE %s start @ lat=%.7f lon=%.7f alt=%.2f",
-                direction,
-                start.latitude_deg,
-                start.longitude_deg,
-                start.relative_altitude_m
+        # start NED
+        start_ned = None
+        try:
+            pv0 = await asyncio.wait_for(
+                self._drone.telemetry.position_velocity_ned().__anext__(),
+                timeout=2.0
             )
+            start_ned = pv0.position
+            self.log.info(
+                "MOVE %s start @ N=%.2f, E=%.2f, D=%.2f",
+                direction,
+                start_ned.north_m,
+                start_ned.east_m,
+                start_ned.down_m
+            )
+        except asyncio.TimeoutError:
+            self.log.warning("MOVE %s start: no NED data received", direction)
 
-        # Send initial setpoint and enter offboard
+        # do the move
         await self._start_offboard_once()
-        await self._drone.offboard.set_velocity_ned(
-            VelocityNedYaw(vx, vy, -vz, 0)
-        )
+        await self._drone.offboard.set_velocity_ned(VelocityNedYaw(vx, vy, -vz, 0))
         await asyncio.sleep(duration)
-        await self._drone.offboard.set_velocity_ned(
-            VelocityNedYaw(0, 0, 0, 0)
-        )
+        await self._drone.offboard.set_velocity_ned(VelocityNedYaw(0, 0, 0, 0))
 
-        # Log end position
-        end = self._cache["pos"]
-        if end:
-            self.log.info(
-                "MOVE %s end   @ lat=%.7f lon=%.7f alt=%.2f",
-                direction,
-                end.latitude_deg,
-                end.longitude_deg,
-                end.relative_altitude_m
+        # end NED
+        try:
+            pv1 = await asyncio.wait_for(
+                self._drone.telemetry.position_velocity_ned().__anext__(),
+                timeout=2.0
             )
+            end_ned = pv1.position
+            if start_ned:
+                moved = _ned_distance(start_ned, end_ned)
+                self.log.info(
+                    "MOVE %s end   @ N=%.2f, E=%.2f, D=%.2f   Δ=%.2f m",
+                    direction,
+                    end_ned.north_m,
+                    end_ned.east_m,
+                    end_ned.down_m,
+                    moved
+                )
+            else:
+                self.log.info(
+                    "MOVE %s end   @ N=%.2f, E=%.2f, D=%.2f",
+                    direction,
+                    end_ned.north_m,
+                    end_ned.east_m,
+                    end_ned.down_m
+                )
+        except asyncio.TimeoutError:
+            self.log.warning("MOVE %s end: no NED data received", direction)
 
         return f"MOVE OK {direction} {distance} m\nEND_RESPONSE"
 
-
-    # -------- yaw ------------------------------------------------------
-    def yaw_drone(self, arg: str, angle=15):
+    def yaw_drone(self, arg: str, angle: float = 15.0):
+        """
+        Entry point for YAW commands.  Rotates at a fixed rate for ~2s.
+        """
         return self._run(self._yaw_async(arg, angle))
 
-
     async def _yaw_async(self, arg, angle):
+        """
+        Coroutine to:
+        1) Log start yaw (in degrees),
+        2) Enter offboard and send yaw rate,
+        3) Sleep ~2s,
+        4) Stop and log end yaw.
+        """
+        # Determine yaw rate (deg/s)
         if arg.upper() in ("LEFT", "YAWLEFT"):
             yaw_rate = -abs(angle)
         elif arg.upper() in ("RIGHT", "YAWRIGHT"):
@@ -370,12 +483,12 @@ class FlightController:                            # same public name!
         else:
             yaw_rate = float(arg)
 
-        # Log start yaw
+        # Log starting yaw angle (deg)
         start_att = self._cache["att"]
         if start_att:
             self.log.info("YAW %s start: %.1f°", arg, start_att.yaw_deg)
 
-        # Execute yaw
+        # Perform the yaw
         await self._start_offboard_once()
         await self._drone.offboard.set_velocity_ned(
             VelocityNedYaw(0, 0, 0, yaw_rate)
@@ -385,15 +498,20 @@ class FlightController:                            # same public name!
             VelocityNedYaw(0, 0, 0, 0)
         )
 
-        # Log end yaw
+        # Log ending yaw angle (deg)
         end_att = self._cache["att"]
         if end_att:
-            self.log.info("YAW %s end:   %.1f°", arg, end_att.yaw_deg)
+            self.log.info("YAW %s end:   %.1f°   Δ≈%.1f°", arg, end_att.yaw_deg, yaw_rate)
 
         return f"YAW Δ≈{yaw_rate}°\nEND_RESPONSE"
 
-    # -------- telemetry ------------------------------------------------
-    def start_telemetry(self, radio, period=0.2):
+
+    # ─────────────── Telemetry Interface ─────────────────────────────
+    def start_telemetry(self, radio, period: float = 0.2):
+        """
+        Start a background thread that periodically sends the JSON
+        state snapshot over the provided radio interface.
+        """
         if self._tele_th:
             return
 
@@ -408,22 +526,25 @@ class FlightController:                            # same public name!
         self._tele_th.start()
 
     def stop_telemetry(self):
+        """Pause the background telemetry thread."""
         self._telem_suspended.set()
 
-    # -------- state snap-shot -----------------------------------------
+    # ─────────────── State Snapshot ───────────────────────────────────
     def get_state_dict(self):
+        """
+        Return the latest cached {battery, position, attitude} as a dict.
+        """
         return self._run(self._state_async())
 
     async def _state_async(self):
         """
-        Return the most recent battery / position / attitude.
-        Wait ⩽5 s for the **first** full sample, afterwards never block.
+        Coroutine to assemble a timestamped snapshot of battery, position,
+        and attitude.  Waits up to 5s for the initial full cache.
         """
-        # Wait until all three keys are non-None (first message of each stream)
         try:
             await asyncio.wait_for(self._cache_ready.wait(), 5.0)
         except asyncio.TimeoutError:
-            pass    # continue – you may still have partial data
+            pass  # may be partial
 
         batt = self._cache["batt"]
         pos  = self._cache["pos"]
@@ -431,42 +552,48 @@ class FlightController:                            # same public name!
 
         return {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "battery":  {"voltage": batt.voltage_v              if batt else 0.0,
-                        "remaining": batt.remaining_percent    if batt else 0.0},
-            "location": {"lat": pos.latitude_deg                if pos else 0.0,
-                        "lon": pos.longitude_deg               if pos else 0.0,
-                        "rel_alt": pos.relative_altitude_m     if pos else 0.0},
-            "attitude": {"roll": att.roll_deg                   if att else 0.0,
-                        "pitch": att.pitch_deg                 if att else 0.0,
-                        "yaw": att.yaw_deg                     if att else 0.0},
+            "battery": {
+                "voltage": batt.voltage_v if batt else 0.0,
+                "remaining": batt.remaining_percent if batt else 0.0
+            },
+            "location": {
+                "lat": pos.latitude_deg if pos else 0.0,
+                "lon": pos.longitude_deg if pos else 0.0,
+                "rel_alt": pos.relative_altitude_m if pos else 0.0
+            },
+            "attitude": {
+                "roll": att.roll_deg if att else 0.0,
+                "pitch": att.pitch_deg if att else 0.0,
+                "yaw": att.yaw_deg if att else 0.0
+            }
         }
 
-        
     def get_state(self):
+        """Return JSON + END_RESPONSE of the current state snapshot."""
         blob = json.dumps(self.get_state_dict(), indent=2)
         return blob + "\nEND_RESPONSE"
 
-    # -------- internal -------------------------------------------------
+    # ─────────────── Internal Runner ──────────────────────────────────
     async def _start_offboard_once(self):
+        """
+        Send a neutral setpoint then start offboard mode once
+        so future set_velocity calls succeed.
+        """
         try:
-            # send a neutral set-point so the first start() never fails
-            await self._drone.offboard.set_velocity_ned(
-                    VelocityNedYaw(0, 0, 0, 0))
+            await self._drone.offboard.set_velocity_ned(VelocityNedYaw(0,0,0,0))
             await self._drone.offboard.start()
         except OffboardError as err:
-            if err._result.result != OffboardResult.Result.BUSY:
+            if err._result.result != mavsdk.offboard.OffboardResult.Result.BUSY:
                 raise
 
-
     def _run(self, coro, block: bool = True):
-        """Ensure the asyncio loop is up, connect on-demand, then run *coro*."""
-        self._ensure_loop()                          # starts loop + schedules _async_connect
-
-        # ─── NEW: if nothing is connected yet, block until we are ────
+        """
+        Ensure loop+connection, then run the given coroutine.
+        If block=True, wait for and return its result.
+        """
+        self._ensure_loop()
         if not self._connected:
-            # give SITL and MAVSDK a bit longer on the first call
             self.connect(timeout=20.0)
-        # ──────────────────────────────────────────────────────────────
 
         fut = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return fut.result() if block else None
