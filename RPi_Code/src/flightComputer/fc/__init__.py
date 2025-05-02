@@ -13,7 +13,8 @@ from flightComputer import config
 
 # One shared instance used by the GUI / CLI
 FC = FlightController(
-        connection_string="udp://:14540",      # server-style URL
+        connection_string=config.FC_CONN_STRING,      # server-style URL
         baud_rate=config.FC_BAUD,
-        simulation_mode=config.SIMULATION_MODE
+        simulation_mode=config.SIMULATION_MODE,
+        indoor_mode=config.INDOOR_MODE
 )

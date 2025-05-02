@@ -4,13 +4,18 @@ from flightComputer.routing.dispatcher import Dispatcher
 from flightComputer.fc                 import FC
 import time, logging, signal, sys
 
+from flightComputer.config import FC_CONN_STRING, SIMULATION_MODE, FC_BAUD
+from flightComputer.fc.mavsdk_fc import FlightController
+
+
 import asyncio, mavsdk
 
 def main() -> None:
     init()
     disp = Dispatcher()     # creates RadioReceiver
     disp.start()            # start the thread
-    FC.connect()            # launch SITL + MAVSDK
+    
+    FC.connect()            # launch MAVSDK
      
     try:
         # lazy-connect: will happen automatically on first command

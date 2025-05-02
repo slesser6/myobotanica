@@ -1,5 +1,6 @@
 import os, subprocess, subprocess, tempfile, pathlib, logging, time
 from typing import Union
+from flightComputer.config import INDOOR_MODE
 
 _log = logging.getLogger(__name__)
 
@@ -7,7 +8,7 @@ _log = logging.getLogger(__name__)
 ARDUPILOT = pathlib.Path("/home/OctoDronePi/ardupilot")
 
 # ①  quad.parm lives in the *same* directory as this sitl.py
-DEFAULTS = pathlib.Path(__file__).parent / "quad.parm"
+# DEFAULTS = pathlib.Path(__file__).parent / "quad.parm"
 
 _DEFAULT_BIN = pathlib.Path(
     os.environ.get(
@@ -32,6 +33,9 @@ class SitlManager:
                 "• Build ArduPilot with  `./waf copter`  or\n"
                 "• set ARDUPILOT_SITL_BIN=/path/to/arducopter"
             )
+        
+        self._parm_normal = pathlib.Path(__file__).parent / "quad.parm"
+        self._parm_indoor = pathlib.Path(__file__).parent / "quad_indoor.parm"
 
     # ------------------------------------------------------------------
     def start(self, udp_port: int = 14540) -> str:
@@ -40,19 +44,23 @@ class SitlManager:
 
         workdir = tempfile.mkdtemp(prefix="sitl_")
 
-        DEFAULTS = (
-            pathlib.Path(__file__).parent / "quad.parm"
-        )
+        defaults = self._parm_indoor if INDOOR_MODE else self._parm_normal
 
+        # log which mode we’re in and which .parm we’ll use
+        if INDOOR_MODE:
+            _log.info("Indoor mode ENABLED → loading SITL defaults from %s", defaults)
+        else:
+            _log.info("Indoor mode DISABLED → loading SITL defaults from %s", defaults)
+      
         cmd = [
             str(_DEFAULT_BIN),
             "-I", "0",
             "--model", "quad",
             "--speedup", "1",
-            "--defaults", str(DEFAULTS),          #  ← no extra “fc/”
+            "--wipe",                          # ← add this line
+            "--defaults", str(defaults),       # ← no change needed here
             "--serial0", "udpclient:127.0.0.1:14540",
         ]
-
 
         _log.info("Launching SITL: %s", " ".join(cmd))
 

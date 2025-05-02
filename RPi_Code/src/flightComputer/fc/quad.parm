@@ -1,9 +1,30 @@
-FRAME_CLASS,1
-FRAME_TYPE,1
-ARMING_CHECK,0
-EK3_REQUIRE_POS,0
-BATT_MONITOR,4
-SIM_BATT_VOLTAGE,12.60
-GPS_TYPE,1
-SIM_GPS_USE_DEFAULTS,1
-SIM_SPEEDUP,1
+# ───────────────────────────────────────────────────────────────
+# Frame configuration
+# ───────────────────────────────────────────────────────────────
+FRAME_CLASS,1            ; 1 = Quad
+FRAME_TYPE,1             ; 1 = "X" frame
+
+# ───────────────────────────────────────────────────────────────
+# Arming and safety checks
+# ───────────────────────────────────────────────────────────────
+ARMING_CHECK,1           ; Disable all arming checks (for quick testing)
+#EK3_REQUIRE_POS,0        ; Don’t require position estimate to arm
+EK3_REQUIRE_POS = 1
+EK3_ALT_SOURCE,1         ; Use barometer for altitude
+
+# ───────────────────────────────────────────────────────────────
+# Simulation parameters
+# ───────────────────────────────────────────────────────────────
+SIM_SPEEDUP,1            ; Run simulation in real-time
+SIM_GPS_USE_DEFAULTS,1   ; Use SITL default GPS location
+SIM_BATT_VOLTAGE,12.60   ; Simulated battery voltage (V)
+
+# ───────────────────────────────────────────────────────────────
+# Battery monitoring
+# ───────────────────────────────────────────────────────────────
+BATT_MONITOR,4           ; 4 = Simulator (used in SITL)
+
+# ───────────────────────────────────────────────────────────────
+# GPS configuration
+# ───────────────────────────────────────────────────────────────
+GPS_TYPE,1               ; 1 = Auto-detect GPS (enabled)
