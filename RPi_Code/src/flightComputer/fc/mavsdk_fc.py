@@ -398,12 +398,12 @@ class FlightController:
         """
 
         # ---- guard: already airborne? -----------------------------------
-        try:
-            if await self._is_airborne():
-                self.log.warning("Take-off request ignored – already airborne.")
-                return "ERR Take-off blocked: already airborne\nEND_RESPONSE"
-        except asyncio.TimeoutError:
-            self.log.warning("Take-off guard: no landed_state telemetry; proceeding")
+#        try:
+#            if await self._is_airborne():
+#                self.log.warning("Take-off request ignored – already airborne.")
+#                return "ERR Take-off blocked: already airborne\nEND_RESPONSE"
+#        except asyncio.TimeoutError:
+#            self.log.warning("Take-off guard: no landed_state telemetry; proceeding")
 
         # ---- set desired altitude once ----------------------------------
         try:
@@ -713,7 +713,7 @@ class FlightController:
     def move(
         self,
         direction: Union[str, Tuple[float,float,float]] = "FWD",
-        distance: float = 0.5,
+        distance: float = 0.25,
         velocity: float = 0.5,
         block: bool = True,
         duration: Optional[float] = None
@@ -747,7 +747,7 @@ class FlightController:
 
 
     # ------------------------------------------------------------------
-    # New MOVE implementation – absolute NED target + background hold
+    # MOVE coomand – absolute NED target + background hold
     # ------------------------------------------------------------------
     async def _move_async(self, direction, distance, velocity, duration):
         """
@@ -779,13 +779,14 @@ class FlightController:
                     direction, start.north_m, start.east_m, start.down_m)
 
         # -------------------------------------------------------------- 2
-        distance = 1 # Hardcode travel distance to 1m (for now)
+        distance = 0.5 # Hardcode travel distance to 1m (for now)
         mag = math.sqrt(sum(v*v for v in vec))
         unit = tuple(v/mag for v in vec)
         tgt_n = start.north_m + unit[0] * distance
         tgt_e = start.east_m  + unit[1] * distance
         tgt_d = start.down_m  + unit[2] * distance          # +D is down in NED
-        target = PositionNedYaw(tgt_n, tgt_e, tgt_d, 0)
+        # target = PositionNedYaw(tgt_n, tgt_e, tgt_d, 0)
+        target = PositionNedYaw(tgt_n, tgt_e, -1.5, 0) # Hardcode positiom to -1.5m 
 
         self.log.info(f"Target Position Set, North: {tgt_n}, East: {tgt_e}, Down: {tgt_d}")
         
@@ -1065,10 +1066,16 @@ class FlightController:
         if getattr(self, "_hold_task", None) and not self._hold_task.done():
             self._hold_task.cancel()
 
+        # hold_point = PositionNedYaw(pos_ned.north_m,
+        #                             pos_ned.east_m,
+        #                             pos_ned.down_m,
+        #                             target_yaw)
+
+        # Hard code to 1.5m for altitude         
         hold_point = PositionNedYaw(pos_ned.north_m,
-                                    pos_ned.east_m,
-                                    pos_ned.down_m,
-                                    target_yaw)
+                            pos_ned.east_m,
+                            -1.5,
+                            target_yaw)
 
         self._hold_task = self._loop.create_task(
             self._feed_position_hold(hold_point))

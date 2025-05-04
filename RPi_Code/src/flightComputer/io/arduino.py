@@ -156,7 +156,7 @@ class ArduinoController(SerialLink):
 
             # ---------------------- ON -------------------------------------
             if action == "ON":
-                duration = 3000
+                duration = 6000
                 if len(parts) > 2 and parts[2].isdigit():
                     duration = int(parts[2])
 
@@ -199,7 +199,7 @@ class ArduinoController(SerialLink):
     #     self.flush()
     #     return self._wait_response()
     
-    def pump_fixed(self, duration_ms: int = 3000) -> str:
+    def pump_fixed(self, duration_ms: int = 6000) -> str:
         """
         Turn the pump ON for duration_ms and return the Arduino's ACK line.
         """
